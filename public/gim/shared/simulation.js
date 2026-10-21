@@ -19,7 +19,7 @@ import {
   BEAM_LENGTH_SCALE, COLLISION_EPSILON, HALF, FLOAT_ZERO,
 } from './constants.js';
 import { BRAWLERS, getAttack } from './brawlers.js';
-import { resolveCircle, clamp, raycast, circleBlocked, distanceToSegmentSq, angleDelta } from './physics.js';
+import { resolveCircle, clamp, raycast, circleBlocked, distanceToSegmentSq, angleDelta, hasLineOfSight } from './physics.js';
 import { emitEvent, getEntity } from './world.js';
 import { queryTargets, applyEffects, damageEntity, healEntity, hitArea, QUERY_ENEMIES } from './combat.js';
 import { stepBots, updateNav, spawnBotsIfNeeded, clearBots } from './bots.js';
@@ -627,7 +627,7 @@ function stepZones(world, dtMs) {
     }
     z.tickAccMs += Math.min(dtMs, z.remainingMs);
     z.remainingMs -= dtMs;
-    while (z.tickAccMs >= ZONE_TICK_MS && (z.remainingMs > 0 || z.tickAccMs > ZONE_TICK_MS)) {
+    while (z.tickAccMs >= ZONE_TICK_MS && z.remainingMs > 0) {
       z.tickAccMs -= ZONE_TICK_MS;
       zoneTick(world, z);
     }
