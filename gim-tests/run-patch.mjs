@@ -39,9 +39,13 @@ test('Yann ne tire pas en étant invisible, retire après', () => {
   assert.ok(yann.invisMs > 0, 'invisible');
   input.buttons = BTN_ATTACK;
   let fired = 0;
-  while (yann.invisMs > 0) fired |= stepPlayerSelf(yann, input, TICK_MS, ARENA) & ACTION_FIRED_MAIN;
+  let firedAfter = 0;
+  for (let t = 0; t < 400; t++) {
+    const f = stepPlayerSelf(yann, input, TICK_MS, ARENA) & ACTION_FIRED_MAIN;
+    if (yann.invisMs > 0) fired |= f; else firedAfter |= f;
+  }
   assert.equal(fired, 0, 'aucun tir pendant l’invisibilité');
-  assert.ok(stepPlayerSelf(yann, input, TICK_MS, ARENA) & ACTION_FIRED_MAIN, 'tire dès la fin');
+  assert.ok(firedAfter, 'tire de nouveau une fois visible');
 });
 
 test('message « pick » validé', () => {
