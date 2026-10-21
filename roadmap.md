@@ -12,3 +12,11 @@
 - [x] Balance patch (Yann, Vladimir, Mathéo, Mohammed, Adam, Clément, Breuer)
 - [x] End-of-round screen: scoreboard K.O./morts, podium, change character
 - [x] Increase room capacity to 32; preserve room across signaling recovery; verify 32 admissions and real three-browser visibility
+- [ ] iPhone guest could not join: longer connection attempts, iOS input fixes, test in Safari engine
+- [ ] Host picks game duration
+- [ ] Cleaner, simpler end-of-round screen
+- [ ] Random teams at every new round
+- [ ] Second map (CDI) with hiding spots (coat racks) + map choice (one / both rotating)
+- [ ] Pre-game lobby: everyone with the code waits, picks character; host-only settings visible to all; host launches
+- [ ] Home menu with Héberger / Rejoindre buttons
+- [ ] Full verification + many tests
