@@ -43,7 +43,8 @@ export const COLLISION_EPSILON = 1e-6;
 
 export const OBSTACLE_RECT = 1;
 export const OBSTACLE_CIRCLE = 2;
-export const OBSTACLE_LOOK = Object.freeze({ TABLE: 1, LOCKER: 2, PILLAR: 3, DESK: 4 });
+export const OBSTACLE_LOOK = Object.freeze({ TABLE: 1, LOCKER: 2, PILLAR: 3, DESK: 4, SHELF: 5 });
+export const SHELF_HEIGHT = 1.9;
 export const TABLE_HEIGHT = 0.8;
 export const LOCKER_HEIGHT = 2.1;
 export const PILLAR_HEIGHT = 3.2;
@@ -75,6 +76,18 @@ export const TEAM_COUNT = 2;
 export const TEAM_NAMES = Object.freeze(['BLEUS', 'ROUGES', 'PROFS']);
 
 export const ROUND_DURATION_MS = 180000;
+/** Durées de manche proposées à l'hôte dans le salon d'attente (minutes). */
+export const ROUND_DURATION_CHOICES_MIN = Object.freeze([1, 2, 3, 5, 10]);
+export const MAX_ROUND_DURATION_MS = 600000;
+/** Cartes : 0 = la salle de classe d'origine, 1 = le CDI (cachettes). Mode « les deux » : tirage à chaque manche. */
+export const MAP_CLASSE = 0;
+export const MAP_CDI = 1;
+export const MAP_COUNT = 2;
+export const MAP_MODE_BOTH = 2;
+export const MAP_NAMES = Object.freeze(['La salle de classe', 'Le CDI']);
+/** Cachettes (portemanteaux) : un ennemi n'est vu qu'à moins de cette distance, ou pendant un court instant après avoir attaqué. */
+export const HIDE_SEE_DISTANCE = 2.6;
+export const HIDE_REVEAL_MS = 1200;
 export const ROUND_END_PAUSE_MS = 15000;
 export const ROUND_PHASE_PLAYING = 0;
 export const ROUND_PHASE_ENDED = 1;

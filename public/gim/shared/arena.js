@@ -5,7 +5,7 @@
  */
 import {
   ARENA_WIDTH, ARENA_HEIGHT, OBSTACLE_RECT, OBSTACLE_CIRCLE, OBSTACLE_LOOK,
-  TABLE_HEIGHT, LOCKER_HEIGHT, PILLAR_HEIGHT, DESK_HEIGHT, HALF,
+  TABLE_HEIGHT, LOCKER_HEIGHT, PILLAR_HEIGHT, DESK_HEIGHT, SHELF_HEIGHT, HALF,
 } from './constants.js';
 
 /**
@@ -37,7 +37,11 @@ import {
  * @property {readonly Obstacle[]} obstacles
  * @property {readonly (readonly SpawnPoint[])[]} teamSpawns
  * @property {readonly SpawnPoint[]} botSpawns
+ * @property {readonly Hideout[]} hideouts  Cachettes : zones traversables où l'on n'est vu que de près.
+ * @property {number} id
  */
+
+/** @typedef {{minX:number,minY:number,maxX:number,maxY:number}} Hideout */
 
 /**
  * @param {number} look
@@ -115,4 +119,67 @@ export const ARENA = Object.freeze({
   ]),
   // Les profs entrent par les « portes » du haut et du bas
   botSpawns: Object.freeze([point(12, 1), point(28, 1), point(12, 25), point(28, 25)]),
+  hideouts: Object.freeze([]),
+  id: 0,
 });
+
+/** @param {number} x @param {number} y @param {number} w @param {number} h @returns {Hideout} */
+function hideout(x, y, w, h) {
+  return Object.freeze({ minX: x, minY: y, maxX: x + w, maxY: y + h });
+}
+
+const S = OBSTACLE_LOOK.SHELF;
+
+/**
+ * Deuxième carte : le CDI. Étagères de livres, grande table de lecture,
+ * et des coins « portemanteaux » où l'on se cache dans les manteaux (comme les buissons de Brawl Stars).
+ * @type {Arena}
+ */
+export const ARENA_CDI = Object.freeze({
+  width: ARENA_WIDTH,
+  height: ARENA_HEIGHT,
+  obstacles: Object.freeze([
+    // Étagères le long des allées latérales
+    rect(S, 9, 3, 1, 5.5, SHELF_HEIGHT),
+    rect(S, 30, 3, 1, 5.5, SHELF_HEIGHT),
+    rect(S, 9, 17.5, 1, 5.5, SHELF_HEIGHT),
+    rect(S, 30, 17.5, 1, 5.5, SHELF_HEIGHT),
+    // Étagères basses du milieu
+    rect(S, 14.5, 6, 4, 1, SHELF_HEIGHT),
+    rect(S, 21.5, 6, 4, 1, SHELF_HEIGHT),
+    rect(S, 14.5, 19, 4, 1, SHELF_HEIGHT),
+    rect(S, 21.5, 19, 4, 1, SHELF_HEIGHT),
+    // Grande table de lecture au centre
+    rect(T, 18.2, 11.8, 3.6, 2.4, TABLE_HEIGHT),
+    // Bureaux de la documentaliste devant chaque camp
+    rect(D, 5.5, 11.8, 1.4, 2.4, DESK_HEIGHT),
+    rect(D, 33.1, 11.8, 1.4, 2.4, DESK_HEIGHT),
+    circle(P, 13, 13, 0.6, PILLAR_HEIGHT),
+    circle(P, 27, 13, 0.6, PILLAR_HEIGHT),
+  ]),
+  teamSpawns: Object.freeze([
+    Object.freeze([point(2.2, 9), point(2.2, 13), point(2.2, 17)]),
+    Object.freeze([point(37.8, 9), point(37.8, 13), point(37.8, 17)]),
+  ]),
+  botSpawns: Object.freeze([point(6, 1), point(34, 1), point(6, 25), point(34, 25)]),
+  hideouts: Object.freeze([
+    hideout(12, 1.2, 5, 3), hideout(23, 1.2, 5, 3),
+    hideout(12, 21.8, 5, 3), hideout(23, 21.8, 5, 3),
+    hideout(12.5, 8.5, 3, 2.5), hideout(24.5, 8.5, 3, 2.5),
+    hideout(12.5, 15, 3, 2.5), hideout(24.5, 15, 3, 2.5),
+  ]),
+  id: 1,
+});
+
+/** Toutes les cartes, indexées par MAP_CLASSE / MAP_CDI. */
+export const MAPS = Object.freeze([ARENA, ARENA_CDI]);
+
+/** @param {Arena} arena @param {number} x @param {number} y @returns {boolean} Point dans une cachette ? */
+export function inHideout(arena, x, y) {
+  const list = arena.hideouts;
+  for (let i = 0; i < list.length; i++) {
+    const h = list[i];
+    if (x >= h.minX && x <= h.maxX && y >= h.minY && y <= h.maxY) return true;
+  }
+  return false;
+}
