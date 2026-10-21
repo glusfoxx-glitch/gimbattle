@@ -95,6 +95,8 @@ export const hosts = new Map();
 /** Host server with its tick source (the worker in the browser) driven by the virtual clock. */
 export function startHost(room, { tickEvery = C.TICK_MS / 4, stalls = [] } = {}) {
   const server = new HostServer(room);
+  // These scenarios test the game itself: skip the waiting room (covered by run-multiplayer / run-lobby).
+  server.lobby = false;
   const h = { server, room, links: [], stopped: false };
   const tick = () => {
     if (h.stopped) return;

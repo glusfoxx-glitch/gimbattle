@@ -14,21 +14,29 @@ host.onopen = () => { opened++; host.send(JSON.stringify({ t: 'join', name: 'Hos
 host.onmessage = data => { if (typeof data === 'string') messages.push(JSON.parse(data)); };
 peer.emit('open');
 await Promise.resolve();
+await new Promise((r) => setTimeout(r, 0));
 const channels = [];
 for (let i = 1; i < 32; i++) {
   const c = new PeerChannel(); channels.push(c); peer.emit('connection', c);
   c.emit('data', JSON.stringify({ t: 'join', name: `P${i}`, brawler: i % 9 }));
-  assert.equal(JSON.parse(c.messages[0]).slot, i);
+  assert.equal(JSON.parse(c.messages.at(-1)).t, 'lobby');
 }
+const lastLobby = JSON.parse(channels[30].messages.at(-1));
+assert.equal(lastLobby.players.length, 32);
 peer.emit('open'); // signaling recovery must not replace the room
 assert.equal(opened, 1);
+host.send(JSON.stringify({ t: 'start' }));
+const slots = new Set(channels.map((c) => { const w = c.messages.map((m) => JSON.parse(m)).find((m) => m.t === 'welcome'); return w.slot; }));
+assert.equal(slots.size, 31);
+const freed = channels[4].messages.map((m) => JSON.parse(m)).find((m) => m.t === 'welcome').slot;
 channels[4].close();
 const replacement = new PeerChannel(); peer.emit('connection', replacement);
 replacement.emit('data', JSON.stringify({ t: 'join', name: 'Replacement', brawler: 0 }));
-assert.equal(JSON.parse(replacement.messages[0]).slot, 5);
+assert.equal(JSON.parse(replacement.messages[0]).slot, freed);
 const overflow = new PeerChannel(); peer.emit('connection', overflow);
 overflow.emit('data', JSON.stringify({ t: 'join', name: 'Overflow', brawler: 0 }));
 assert.match(JSON.parse(overflow.messages[0]).message, /32/);
+await new Promise((r) => setTimeout(r, 0));
 assert.equal(messages.filter(m => m.t === 'welcome').length, 1);
 host.close();
 const guest = createGuestSocket('many');
