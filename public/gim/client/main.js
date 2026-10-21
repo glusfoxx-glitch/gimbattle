@@ -112,7 +112,7 @@ function startGame(name, brawler, room, mode) {
     if (state !== STATE_CONNECTING) return;
     state = STATE_MENU;
     menu.setBusy(false);
-    menu.setStatus('Aucune partie ne répond. Vérifie le code de salon et que l'hôte est bien en ligne.', true);
+    menu.setStatus("Aucune partie ne répond. Vérifie le code de salon et que l'hôte est bien en ligne.", true);
   }, CONNECT_TIMEOUT_MS);
 }
 

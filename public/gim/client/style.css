@@ -102,7 +102,7 @@ html, body {
 
 .field { display: flex; flex-direction: column; gap: 2px; }
 .field span { font-size: 20px; color: var(--chalk-dim); line-height: 1; }
-.field input {
+.field input, .field select {
   width: 13ch;
   font: 700 17px var(--ui);
   color: var(--chalk);
@@ -114,7 +114,7 @@ html, body {
 }
 .field-room input { width: 8ch; }
 .field input::placeholder { color: var(--chalk-faint); }
-.field input:focus-visible { border-bottom-color: var(--marker); }
+.field input:focus-visible, .field select:focus-visible { border-bottom-color: var(--marker); }
 
 .play {
   font: 800 clamp(17px, 1.6vw, 21px) var(--ui);
@@ -332,7 +332,7 @@ html, body {
   .title { font-size: 26px; }
   .tagline, .help { display: none; }
   .field span { font-size: 16px; }
-  .field input { font-size: 15px; width: 10ch; }
+  .field input, .field select { font-size: 15px; width: 10ch; }
   .field-room input { width: 6ch; }
   .play { padding: 7px 16px 8px; }
   .section-title { font-size: 20px; margin-bottom: 4px; }
@@ -368,3 +368,5 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .play, .card[aria-pressed='true'], .sheet { transform: none; }
 }
+.field select { width: auto; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.field select option { color: #222; }
