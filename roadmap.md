@@ -4,3 +4,4 @@
 - [ ] Fix molotov landing / ability bugs
 - [ ] Fix bot (prof) bugs
 - [ ] Fix character moving on its own
+- [ ] Test every character ability in game
