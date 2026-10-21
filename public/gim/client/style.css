@@ -354,8 +354,9 @@ html, body {
   .title { font-size: 26px; }
   .tagline, .help { display: none; }
   .field span { font-size: 16px; }
-  .field input, .field select { font-size: 15px; width: 10ch; }
+  .field input, .field select { font-size: 15px; width: 8ch; }
   .field-room input { width: 6ch; }
+  .join { gap: 10px; flex-wrap: nowrap; }
   .mode-opt { font-size: 14px; padding: 6px 10px; }
   .play { padding: 7px 16px 8px; }
   .section-title { font-size: 20px; margin-bottom: 4px; }
