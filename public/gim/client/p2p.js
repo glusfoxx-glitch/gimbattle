@@ -30,7 +30,6 @@ const PEER_OPTIONS = {
       { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
       { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
     ],
-    sdpSemantics: 'unified-plan',
   },
 };
 
@@ -319,6 +318,7 @@ export function createHostSocket(room) {
     server = new HostServer(room);
     // Le client de l'hôte reçoit les messages du salon en différé (comme par le réseau, sans réentrance).
     self = server.createClient((data) => queueMicrotask(() => { if (!closed) socket.onmessage(data); }));
+    server.hostClient = self;
     socket.onopen();
   });
 
