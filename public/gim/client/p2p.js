@@ -19,6 +19,9 @@ import { createInput } from '../shared/simulation.js';
 import { Room, InputQueue } from '../server/room.js';
 
 const PEER_PREFIX = 'gimbattle-v1-';
+/** Invité : délai avant de retenter une mise en relation restée bloquée, et nombre d'essais. */
+const GUEST_ATTEMPT_TIMEOUT_MS = 6000;
+const GUEST_CONNECT_ATTEMPTS = 3;
 
 /**
  * @typedef {Object} P2PSocket
