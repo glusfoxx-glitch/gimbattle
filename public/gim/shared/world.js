@@ -143,7 +143,7 @@ function createNavGrid(arena) {
  * @property {Pool<Projectile>} projectiles @property {Pool<Zone>} zones
  * @property {GameEvent[]} events @property {number} eventHead  Nombre total d'événements émis (croissant).
  * @property {Int32Array} scores @property {number} roundPhase @property {number} roundMs
- * @property {number} botSpawnMs @property {NavGrid} nav
+ * @property {number} botSpawnMs @property {NavGrid} nav @property {number} roundDurationMs
  * @property {Int32Array} queryRefs @property {number} queryCount  Résultat réutilisable des requêtes spatiales.
  */
 

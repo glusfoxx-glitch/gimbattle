@@ -240,6 +240,7 @@ export function resolveAutoAim(world, p, input) {
     const t = world.players[i];
     if (!t.active || t.dead || t.team === p.team || t.invisMs > 0 || t.leapMs > 0) continue;
     const d2 = (t.x - p.x) * (t.x - p.x) + (t.y - p.y) * (t.y - p.y);
+    if (d2 > HIDE_SEE_DISTANCE * HIDE_SEE_DISTANCE && isHidden(world, t)) continue;
     if (d2 < bestD2) { bestD2 = d2; bestX = t.x; bestY = t.y; found = true; }
   }
   for (let i = 0; i < MAX_BOTS; i++) {
@@ -401,6 +402,7 @@ function performAttack(world, p, def, isSuper, input) {
  */
 export function applyPlayerActions(world, p, flags, input) {
   if (flags === 0) return;
+  if ((flags & (ACTION_FIRED_SUPER | ACTION_FIRED_MAIN)) !== 0) p.revealMs = HIDE_REVEAL_MS;
   const b = BRAWLERS[p.brawlerId];
   if ((flags & ACTION_FIRED_SUPER) !== 0) performAttack(world, p, b.super, true, input);
   if ((flags & ACTION_FIRED_MAIN) !== 0) performAttack(world, p, b.main, false, input);
@@ -412,6 +414,14 @@ export function applyPlayerActions(world, p, flags, input) {
 }
 
 // ---------------------------------------------------------------------------- joueurs
+
+/**
+ * Caché dans une cachette (portemanteaux) et pas trahi par une attaque récente.
+ * @param {World} world @param {Player} p @returns {boolean}
+ */
+export function isHidden(world, p) {
+  return p.revealMs <= 0 && world.arena.hideouts.length > 0 && inHideout(world.arena, p.x, p.y);
+}
 
 /**
  * @param {World} world @param {Player} p @param {Rng} rng
@@ -491,6 +501,7 @@ function stepPlayersWorld(world, dtMs, rng) {
       if (p.respawnMs <= 0) spawnPlayer(world, p, rng);
       continue;
     }
+    if (p.revealMs > 0) p.revealMs -= dtMs;
     if (p.dashing) dashContacts(world, p);
     if (p.hp < p.maxHp && world.roundPhase === ROUND_PHASE_PLAYING) {
       p.outOfCombatMs += dtMs;
@@ -656,7 +667,7 @@ function endRound(world) {
  */
 export function startRound(world, rng) {
   world.roundPhase = ROUND_PHASE_PLAYING;
-  world.roundMs = ROUND_DURATION_MS;
+  world.roundMs = world.roundDurationMs;
   world.scores.fill(0);
   world.projectiles.clear();
   world.zones.clear();
