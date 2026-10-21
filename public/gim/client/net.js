@@ -20,7 +20,7 @@ import { createPlayer } from '../shared/world.js';
 import { createInput, copyInput, stepPlayerSelf } from '../shared/simulation.js';
 import { angleDelta } from '../shared/physics.js';
 import {
-  ByteReader, ByteWriter, encodeInput, encodePing, decodePong, decodeSnapshot, createSnapshot, makeJoin, makeLeave, makePick,
+  ByteReader, ByteWriter, encodeInput, encodePing, decodePong, decodeSnapshot, createSnapshot, makeJoin, makeLeave, makePick, makeSettings, makeStart,
   parseServerText, sanitizeName,
 } from '../shared/protocol.js';
 import { createHostSocket, createGuestSocket } from './p2p.js';
