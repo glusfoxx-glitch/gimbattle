@@ -11,3 +11,4 @@
 - [x] Final French report to the user
 - [x] Balance patch (Yann, Vladimir, Mathéo, Mohammed, Adam, Clément, Breuer)
 - [x] End-of-round screen: scoreboard K.O./morts, podium, change character
+- [ ] Remove small-room restriction and verify real multiplayer beyond two players
