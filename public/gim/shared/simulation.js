@@ -322,6 +322,7 @@ function meleeArc(world, p, def) {
     // Tolérance angulaire élargie par la taille de la cible : on touche un gros prof par le bord.
     const tolerance = def.arcRad * HALF + Math.atan2(target.radius, dist);
     if (Math.abs(angleDelta(p.aimAngle, Math.atan2(dy, dx))) > tolerance) continue;
+    if (!hasLineOfSight(p.x, p.y, target.x, target.y, world.arena)) continue;
     if (damageEntity(world, ref, def.damage, p.ref)) applyEffects(target, def, dx / dist, dy / dist);
   }
 }
@@ -624,9 +625,9 @@ function stepZones(world, dtMs) {
       z.x = owner.x;
       z.y = owner.y;
     }
+    z.tickAccMs += Math.min(dtMs, z.remainingMs);
     z.remainingMs -= dtMs;
-    z.tickAccMs += dtMs;
-    while (z.tickAccMs >= ZONE_TICK_MS) {
+    while (z.tickAccMs >= ZONE_TICK_MS && (z.remainingMs > 0 || z.tickAccMs > ZONE_TICK_MS)) {
       z.tickAccMs -= ZONE_TICK_MS;
       zoneTick(world, z);
     }
