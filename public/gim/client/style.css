@@ -394,3 +394,5 @@ html, body {
 }
 .field select { width: auto; cursor: pointer; appearance: none; -webkit-appearance: none; }
 .field select option { color: #222; }
+.title .logo { display: block; width: 150px; height: auto; }
+@media (max-width: 700px), (max-height: 500px) { .title .logo { width: 90px; } }
