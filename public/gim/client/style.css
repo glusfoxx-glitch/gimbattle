@@ -113,6 +113,28 @@ html, body {
   outline: none;
 }
 .field-room input { width: 8ch; }
+
+/* Créer / Rejoindre : interrupteur à deux gros boutons, impossible à rater. */
+.mode-toggle {
+  display: inline-flex;
+  border: 2px solid var(--chalk);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+}
+.mode-opt {
+  font: 800 16px var(--ui);
+  color: var(--chalk);
+  background: transparent;
+  border: 0;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mode-opt + .mode-opt { border-left: 2px solid var(--chalk); }
+.mode-opt:hover { background: var(--board-raised); }
+.mode-opt.is-on { background: var(--chalk); color: var(--ink-dark); }
+.mode-opt:focus-visible { outline: 3px solid var(--marker); outline-offset: -3px; }
 .field input::placeholder { color: var(--chalk-faint); }
 .field input:focus-visible, .field select:focus-visible { border-bottom-color: var(--marker); }
 
@@ -334,6 +356,7 @@ html, body {
   .field span { font-size: 16px; }
   .field input, .field select { font-size: 15px; width: 10ch; }
   .field-room input { width: 6ch; }
+  .mode-opt { font-size: 14px; padding: 6px 10px; }
   .play { padding: 7px 16px 8px; }
   .section-title { font-size: 20px; margin-bottom: 4px; }
   .section-title small { font-size: 14px; }

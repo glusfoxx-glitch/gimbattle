@@ -27,6 +27,12 @@
         <p class="tagline">Bleus contre Rouges, et les profs qui rôdent entre les tables.</p>
       </div>
       <form id="join-form" class="join" autocomplete="off">
+        <div class="field field-mode">
+          <span class="hand" id="mode-label">Partie</span>
+          <div class="mode-toggle" role="radiogroup" aria-labelledby="mode-label">
+            <button type="button" class="mode-opt" data-mode="host" role="radio" aria-checked="true">Créer</button>
+            <button type="button" class="mode-opt" data-mode="join" role="radio" aria-checked="false">Rejoindre</button>
+          </div>
         <label class="field">
           <span class="hand">Pseudo</span>
           <input id="name-input" name="name" maxlength="16" placeholder="Ton pseudo" enterkeyhint="go">
@@ -35,13 +41,8 @@
           <span class="hand">Code</span>
           <input id="room-input" name="room" maxlength="16" placeholder="ton code" enterkeyhint="go">
         </label>
-        <label class="field field-room">
-          <span class="hand">Partie</span>
-          <select id="mode-input" name="mode">
-            <option value="host">Héberger</option>
-            <option value="join">Rejoindre</option>
-          </select>
-        </label>
+          <input type="hidden" id="mode-input" name="mode" value="host">
+        </div>
         <button id="play-btn" class="play" type="submit">Jouer</button>
       </form>
     </header>

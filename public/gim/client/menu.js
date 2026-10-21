@@ -82,7 +82,9 @@ export class Menu {
     this.preview = byId('preview');
     this.nameInput = /** @type {HTMLInputElement} */ (byId('name-input'));
     this.roomInput = /** @type {HTMLInputElement} */ (byId('room-input'));
-    this.modeInput = /** @type {HTMLSelectElement} */ (byId('mode-input'));
+    this.modeInput = /** @type {HTMLInputElement} */ (byId('mode-input'));
+    /** @type {HTMLButtonElement[]} */
+    this.modeButtons = Array.from(this.root.querySelectorAll('.mode-opt'));
     this.playButton = /** @type {HTMLButtonElement} */ (byId('play-btn'));
     this.status = byId('menu-status');
     this.onSelect = onSelect;
@@ -99,7 +101,10 @@ export class Menu {
 
     this.nameInput.value = readStore(STORAGE_NAME, '');
     this.roomInput.value = readStore(STORAGE_ROOM, DEFAULT_ROOM);
-    this.modeInput.value = readStore(STORAGE_MODE, 'host') === 'join' ? 'join' : 'host';
+    this.setMode(readStore(STORAGE_MODE, 'host') === 'join' ? 'join' : 'host');
+    for (const button of this.modeButtons) {
+      button.addEventListener('click', () => { this.setMode(button.dataset.mode === 'join' ? 'join' : 'host'); this.onSelect(); });
+    }
     this.maxHp = 0;
     this.maxSpeed = 0;
     this.maxRange = 0;
@@ -171,6 +176,27 @@ export class Menu {
     this.render();
   }
 
+  /**
+   * Choix « Créer / Rejoindre » : deux gros boutons bien visibles (le menu déroulant passait inaperçu, surtout sur mobile).
+   * @param {'host'|'join'} mode
+   */
+  setMode(mode) {
+    this.modeInput.value = mode;
+    for (const button of this.modeButtons) {
+      const on = button.dataset.mode === mode;
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+    this.roomInput.placeholder = mode === 'join' ? "code de l'hôte" : 'ton code';
+    this.refreshPlayLabel();
+  }
+
+  refreshPlayLabel() {
+    if (this.playButton === undefined || this.selected === undefined) return;
+    const name = BRAWLERS[this.selected].name;
+    this.playButton.textContent = this.modeInput.value === 'join' ? `Rejoindre avec ${name}` : `Créer avec ${name}`;
+  }
+
   /** @param {(name: string, brawler: number, room: string, mode: string) => void} onPlay */
   submit(onPlay) {
     const name = sanitizeName(this.nameInput.value);
@@ -187,7 +213,7 @@ export class Menu {
   render() {
     this.brawlerCards.forEach((card, id) => card.setAttribute('aria-pressed', String(!this.viewingProf && id === this.selected)));
     this.profCards.forEach((card, id) => card.setAttribute('aria-pressed', String(this.viewingProf && id === this.viewedId)));
-    this.playButton.textContent = `Jouer avec ${BRAWLERS[this.selected].name}`;
+    this.refreshPlayLabel();
     if (this.viewingProf) this.renderProf(PROFS[this.viewedId]);
     else this.renderBrawler(BRAWLERS[this.viewedId]);
   }
