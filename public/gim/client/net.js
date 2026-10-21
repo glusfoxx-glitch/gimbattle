@@ -20,7 +20,7 @@ import { createPlayer } from '../shared/world.js';
 import { createInput, copyInput, stepPlayerSelf } from '../shared/simulation.js';
 import { angleDelta } from '../shared/physics.js';
 import {
-  ByteReader, ByteWriter, encodeInput, encodePing, decodePong, decodeSnapshot, createSnapshot, makeJoin, makeLeave,
+  ByteReader, ByteWriter, encodeInput, encodePing, decodePong, decodeSnapshot, createSnapshot, makeJoin, makeLeave, makePick,
   parseServerText, sanitizeName,
 } from '../shared/protocol.js';
 import { createHostSocket, createGuestSocket } from './p2p.js';
@@ -156,6 +156,8 @@ export class Net {
     this.onError = () => {};
     /** @type {() => void} */
     this.onClose = () => {};
+    /** @type {(results: any) => void} */
+    this.onResults = () => {};
     this.stats = { snapshots: 0, bytes: 0, corrupted: 0 };
   }
 
@@ -202,6 +204,11 @@ export class Net {
     this.joined = false;
     if (this.connected && this.ws !== null && this.mode === mode && this.room === room) this.ws.send(this.pendingJoin);
     else this.connect(mode, room);
+  }
+
+  /** Demande un changement de perso (accepté par l'hôte seulement en fin de manche). @param {number} brawler */
+  pick(brawler) {
+    if (this.connected && this.joined && this.ws !== null) this.ws.send(makePick(brawler));
   }
 
   leave() {
@@ -276,6 +283,19 @@ export class Net {
         r.brawler = Number.isInteger(entry.brawler) && entry.brawler >= 0 && entry.brawler < BRAWLER_COUNT ? entry.brawler : 0;
         r.team = entry.team === TEAM_B ? TEAM_B : TEAM_A;
       }
+    } else if (msg.t === 'results' && Array.isArray(msg.players)) {
+      const players = [];
+      for (const e of msg.players) {
+        if (e === null || typeof e !== 'object' || !Number.isInteger(e.slot) || e.slot < 0 || e.slot >= MAX_PLAYERS) continue;
+        players.push({
+          slot: e.slot, name: sanitizeName(e.name),
+          brawler: Number.isInteger(e.brawler) && e.brawler >= 0 && e.brawler < BRAWLER_COUNT ? e.brawler : 0,
+          team: e.team === TEAM_B ? TEAM_B : TEAM_A,
+          kills: Number.isInteger(e.kills) && e.kills >= 0 ? e.kills : 0,
+          deaths: Number.isInteger(e.deaths) && e.deaths >= 0 ? e.deaths : 0,
+        });
+      }
+      this.onResults({ winner: Number.isInteger(msg.winner) ? msg.winner : 2, scoreA: Number(msg.scoreA) || 0, scoreB: Number(msg.scoreB) || 0, players });
     } else if (msg.t === 'error' && typeof msg.message === 'string') {
       this.onError(msg.message);
     }
