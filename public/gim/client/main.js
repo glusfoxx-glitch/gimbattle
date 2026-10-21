@@ -147,7 +147,7 @@ net.onError = (message) => {
 };
 
 net.onClose = () => {
-  if (state !== STATE_MENU) backToMenu('Connexion perdue avec l'hôte de la partie. Clique sur Jouer pour revenir.', true);
+  if (state !== STATE_MENU) backToMenu("Connexion perdue avec l'hôte de la partie. Clique sur Jouer pour revenir.", true);
 };
 
 menuButton.addEventListener('click', () => {
