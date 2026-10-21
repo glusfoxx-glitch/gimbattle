@@ -13,7 +13,7 @@ import {
   NET_ID_MASK, PROGRESS_QUANT, TEAM_A, TEAM_B, PF_DEAD, PF_STUNNED, PF_SLOWED, PF_SPEED, PF_INVISIBLE, PF_BLIND,
   PF_SHIELD, PF_DASH, PF_AIRBORNE, PF_TEAM_B, AUTO_AIM_RANGE_FACTOR, MAX_AIM_DISTANCE, BOT_REF_BASE, HALF, FLOAT_ZERO,
 } from '../shared/constants.js';
-import { ARENA } from '../shared/arena.js';
+import { ARENA, MAPS } from '../shared/arena.js';
 import { BRAWLERS, BRAWLER_COUNT } from '../shared/brawlers.js';
 import { PROFS } from '../shared/profs.js';
 import { createPlayer } from '../shared/world.js';
@@ -158,6 +158,11 @@ export class Net {
     this.onClose = () => {};
     /** @type {(results: any) => void} */
     this.onResults = () => {};
+    /** @type {(lobby: any) => void} */
+    this.onLobby = () => {};
+    /** Carte en cours (donnée par les snapshots) : la prédiction locale doit buter sur les mêmes obstacles. */
+    this.arena = ARENA;
+    this.inLobby = false;
     this.stats = { snapshots: 0, bytes: 0, corrupted: 0 };
   }
 
@@ -208,7 +213,17 @@ export class Net {
 
   /** Demande un changement de perso (accepté par l'hôte seulement en fin de manche). @param {number} brawler */
   pick(brawler) {
-    if (this.connected && this.joined && this.ws !== null) this.ws.send(makePick(brawler));
+    if (this.connected && (this.joined || this.inLobby) && this.ws !== null) this.ws.send(makePick(brawler));
+  }
+
+  /** Hôte, dans le salon : réglages vus par tous. @param {number} minutes @param {number} map */
+  sendSettings(minutes, map) {
+    if (this.connected && this.inLobby && this.ws !== null) this.ws.send(makeSettings(minutes, map));
+  }
+
+  /** Hôte, dans le salon : lance la partie pour tout le monde. */
+  start() {
+    if (this.connected && this.inLobby && this.ws !== null) this.ws.send(makeStart());
   }
 
   leave() {
@@ -225,6 +240,7 @@ export class Net {
 
   resetSession() {
     this.joined = false;
+    this.inLobby = false;
     this.hasSelf = false;
     this.localSlot = -1;
     this.pendingCount = 0;
@@ -269,6 +285,7 @@ export class Net {
     if (msg === null) return;
     if (msg.t === 'welcome' && Number.isInteger(msg.slot) && msg.slot >= 0 && msg.slot < MAX_PLAYERS) {
       this.resetSession();
+      this.inLobby = false;
       this.joined = true;
       this.localSlot = msg.slot;
       this.localTeam = msg.team === TEAM_B ? TEAM_B : TEAM_A;
@@ -283,6 +300,19 @@ export class Net {
         r.brawler = Number.isInteger(entry.brawler) && entry.brawler >= 0 && entry.brawler < BRAWLER_COUNT ? entry.brawler : 0;
         r.team = entry.team === TEAM_B ? TEAM_B : TEAM_A;
       }
+    } else if (msg.t === 'team' && this.joined) {
+      this.localTeam = msg.team === TEAM_B ? TEAM_B : TEAM_A;
+    } else if (msg.t === 'lobby' && Array.isArray(msg.players)) {
+      this.inLobby = true;
+      const players = [];
+      for (const e of msg.players) {
+        if (e === null || typeof e !== 'object' || !Number.isInteger(e.id)) continue;
+        players.push({ id: e.id, name: sanitizeName(e.name), brawler: Number.isInteger(e.brawler) && e.brawler >= 0 && e.brawler < BRAWLER_COUNT ? e.brawler : 0 });
+      }
+      this.onLobby({
+        you: Number(msg.you), host: Number(msg.host), players,
+        minutes: Number.isInteger(msg.minutes) ? msg.minutes : 3, map: Number.isInteger(msg.map) ? msg.map : 0,
+      });
     } else if (msg.t === 'results' && Array.isArray(msg.players)) {
       const players = [];
       for (const e of msg.players) {
@@ -295,7 +325,10 @@ export class Net {
           deaths: Number.isInteger(e.deaths) && e.deaths >= 0 ? e.deaths : 0,
         });
       }
-      this.onResults({ winner: Number.isInteger(msg.winner) ? msg.winner : 2, scoreA: Number(msg.scoreA) || 0, scoreB: Number(msg.scoreB) || 0, players });
+      this.onResults({
+        winner: Number.isInteger(msg.winner) ? msg.winner : 2, scoreA: Number(msg.scoreA) || 0, scoreB: Number(msg.scoreB) || 0, players,
+        nextMap: Number.isInteger(msg.nextMap) ? msg.nextMap : 0, pauseMs: Number(msg.pauseMs) || 0,
+      });
     } else if (msg.t === 'error' && typeof msg.message === 'string') {
       this.onError(msg.message);
     }
@@ -316,6 +349,7 @@ export class Net {
     this.snapWrite = (this.snapWrite + 1) % SNAPSHOT_BUFFER_SIZE;
     if (this.snapCount < SNAPSHOT_BUFFER_SIZE) this.snapCount++;
     this.latest = slot;
+    if (MAPS[slot.mapId] !== undefined) this.arena = MAPS[slot.mapId];
     const now = performance.now();
     if (!this.clockInit) {
       this.clockInit = true;
@@ -348,7 +382,7 @@ export class Net {
       this.pendingCount--;
     }
     for (let i = 0; i < this.pendingCount; i++) {
-      stepPlayerSelf(p, this.pending[(this.pendingHead + i) % PENDING_INPUT_CAPACITY], TICK_MS, ARENA);
+      stepPlayerSelf(p, this.pending[(this.pendingHead + i) % PENDING_INPUT_CAPACITY], TICK_MS, this.arena);
     }
     if (!this.hasSelf) {
       this.hasSelf = true;
@@ -423,7 +457,7 @@ export class Net {
     if (!this.hasSelf) return 0;
     this.prevX = this.predicted.x;
     this.prevY = this.predicted.y;
-    return stepPlayerSelf(this.predicted, input, TICK_MS, ARENA);
+    return stepPlayerSelf(this.predicted, input, TICK_MS, this.arena);
   }
 
   /**
