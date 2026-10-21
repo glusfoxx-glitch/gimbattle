@@ -141,7 +141,7 @@ export const BRAWLERS = Object.freeze([
     main: attack({
       kind: ATTACK_KIND.LOB, name: 'Cocktail Molotov',
       description: 'Lance une bouteille en cloche par-dessus les obstacles : elle explose et laisse une flaque de feu.',
-      damage: 420, range: 8, cooldownMs: 1150, lobMs: 650, aoeRadius: 1.6, visual: VISUAL.MOLOTOV,
+      damage: 420, range: 8, cooldownMs: 2000, lobMs: 650, aoeRadius: 1.6, visual: VISUAL.MOLOTOV,
       zoneVisual: ZONE_VISUAL.FIRE, zoneRadius: 1.7, zoneMs: 2400, zoneDps: 480,
     }),
     super: attack({
@@ -180,7 +180,7 @@ export const BRAWLERS = Object.freeze([
     main: attack({
       kind: ATTACK_KIND.MELEE, name: 'Coup de rouleau',
       description: 'Un grand coup de rouleau à pâtisserie au corps-à-corps, qui repousse.',
-      damage: 950, range: 2.3, cooldownMs: 700, arcRad: 1.75, knockback: 7,
+      damage: 800, range: 2.3, cooldownMs: 700, arcRad: 1.75, knockback: 7,
     }),
     super: attack({
       kind: ATTACK_KIND.PROJECTILE, name: 'Fournée de brioches',
@@ -195,7 +195,7 @@ export const BRAWLERS = Object.freeze([
   }),
   Object.freeze({
     id: 4, name: 'Mohammed', role: 'Le Mastodonte', accent: '#ff8c1a',
-    hp: 5400, speed: 4.2, radius: 0.8, superRechargeMs: 14000, superChargeDamage: 3200,
+    hp: 5000, speed: 4.2, radius: 0.8, superRechargeMs: 14000, superChargeDamage: 3200,
     main: attack({
       kind: ATTACK_KIND.BEAM, name: 'Snap de tana',
       description: "Dégaine son iPhone 18 orange : le flash du snap frappe instantanément le premier ennemi dans l'axe.",
@@ -214,16 +214,16 @@ export const BRAWLERS = Object.freeze([
   }),
   Object.freeze({
     id: 5, name: 'Adam', role: 'Le Fou de la trottinette', accent: '#22c55e',
-    hp: 2900, speed: 6.1, radius: 0.5, superRechargeMs: 10000, superChargeDamage: 2600,
+    hp: 3000, speed: 6.1, radius: 0.5, superRechargeMs: 10000, superChargeDamage: 2600,
     main: attack({
       kind: ATTACK_KIND.DASH, name: 'Tabouzi trotinette',
-      description: 'Fonce en trottinette sur 4,5 m : tout ennemi fauché perd des PV et est étourdi 1 seconde.',
-      damage: 600, range: 4.5, cooldownMs: 1900, dashMs: 300, stunMs: 1000,
+      description: 'Fonce en trottinette sur 4,5 m : tout ennemi fauché perd des PV et est étourdi 2 secondes.',
+      damage: 600, range: 4.5, cooldownMs: 1900, dashMs: 300, stunMs: 2000,
     }),
     super: attack({
       kind: ATTACK_KIND.PROJECTILE, name: 'Pluie de billets',
       description: 'Fait pleuvoir une liasse de billets à courte portée : plein de petits dégâts très rapides.',
-      damage: 200, range: 5, speed: 15, radius: 0.26, count: 8, spreadRad: 0.85, visual: VISUAL.BILLET,
+      damage: 350, range: 5, speed: 15, radius: 0.26, count: 8, spreadRad: 0.85, visual: VISUAL.BILLET,
     }),
     look: look({
       height: 0.84, build: 0.95, skin: 0xc99068, hair: 0x221c18, hairStyle: HAIR.SIDE,
@@ -259,7 +259,7 @@ export const BRAWLERS = Object.freeze([
     }),
     super: attack({
       kind: ATTACK_KIND.BUFF, name: 'Peur des femmes',
-      description: 'Disparaît totalement pendant 5 secondes : invisible pour les ennemis et les profs. Recharge : 30 s.',
+      description: 'Disparaît totalement pendant 5 secondes : invisible pour les ennemis et les profs, mais impossible de tirer pendant ce temps. Recharge : 30 s.',
       buffMs: 5000, invisible: true,
     }),
     look: look({
@@ -273,7 +273,7 @@ export const BRAWLERS = Object.freeze([
     main: attack({
       kind: ATTACK_KIND.MELEE, name: 'Coup de fouet capillaire',
       description: 'Fouette avec sa longue chevelure : bonne allonge et coup très rapide.',
-      damage: 720, range: 2.9, cooldownMs: 600, arcRad: 1.0, knockback: 3,
+      damage: 720, range: 3.5, cooldownMs: 600, arcRad: 1.0, knockback: 3,
     }),
     super: attack({
       kind: ATTACK_KIND.PROJECTILE, name: 'Électrocution Schneider',

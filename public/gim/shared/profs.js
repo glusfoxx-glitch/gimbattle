@@ -37,8 +37,8 @@ export const PROFS = Object.freeze([
   }),
   Object.freeze({
     id: 1, name: 'Breuer', role: 'Le Lent Dévastateur', accent: '#7c3aed',
-    description: 'Petit, très lent et fragile, mais son coup de ventre au corps-à-corps est dévastateur. Éloigne-toi dès qu\'il prend son élan !',
-    hp: 1700, radius: 0.7, speed: 1.9, behavior: BOT_BEHAVIOR.MELEE,
+    description: 'Petit, très lent, mais son coup de ventre au corps-à-corps est dévastateur. Éloigne-toi dès qu\'il prend son élan !',
+    hp: 3500, radius: 0.7, speed: 1.9, behavior: BOT_BEHAVIOR.MELEE,
     detectRange: 1.5, windupMs: 750, damage: 1900, knockback: 9, stunMs: 0, slowFactor: 1, slowMs: 0,
     strikeRadius: 2, strikeOffset: 0, chargeSpeed: 0, chargeMs: 0, recoverMs: 600, cooldownMs: 1700,
     look: look({

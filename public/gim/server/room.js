@@ -4,7 +4,7 @@
  */
 import {
   MAX_PLAYERS, MAX_INPUT_QUEUE, INPUT_CATCHUP_THRESHOLD, TICK_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_BUFFER_BYTES,
-  TEAM_A, TEAM_B, MAX_SEQ_JUMP, INPUT_STARVE_GRACE_TICKS,
+  TEAM_A, TEAM_B, MAX_SEQ_JUMP, INPUT_STARVE_GRACE_TICKS, ROUND_PHASE_ENDED, ROUND_DRAW,
 } from '../shared/constants.js';
 import { ARENA } from '../shared/arena.js';
 import { createWorld, countTeam } from '../shared/world.js';
@@ -13,7 +13,7 @@ import {
   createInput, copyInput, stepPlayerSelf, applyPlayerActions, stepWorld, resolveAutoAim, activatePlayer, deactivatePlayer,
   dashContacts,
 } from '../shared/simulation.js';
-import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster } from '../shared/protocol.js';
+import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster, makeResults } from '../shared/protocol.js';
 
 /** @typedef {import('../shared/simulation.js').PlayerInput} PlayerInput */
 
@@ -171,7 +171,9 @@ export class Room {
       const client = this.clients[i];
       if (client !== null) this.processInputs(client);
     }
+    const phaseBefore = this.world.roundPhase;
     stepWorld(this.world, TICK_MS, this.rng);
+    if (phaseBefore !== ROUND_PHASE_ENDED && this.world.roundPhase === ROUND_PHASE_ENDED) this.broadcastResults();
     if (this.rosterDirty) this.broadcastRoster();
     this.snapshotAccMs += TICK_MS;
     if (this.snapshotAccMs >= SNAPSHOT_INTERVAL_MS) {
@@ -194,6 +196,37 @@ export class Room {
       client.send(takeBytes(this.writer));
     }
     ctx.viewer = null;
+  }
+
+  /**
+   * Changement de perso, autorisé seulement pendant l'écran de fin de manche (appliqué à la réapparition).
+   * @param {RoomClient} client @param {number} brawlerId
+   * @returns {boolean}
+   */
+  pickBrawler(client, brawlerId) {
+    if (client.room !== this || client.slot < 0 || this.world.roundPhase !== ROUND_PHASE_ENDED) return false;
+    client.brawlerId = brawlerId;
+    this.world.players[client.slot].brawlerId = brawlerId;
+    this.rosterDirty = true;
+    return true;
+  }
+
+  broadcastResults() {
+    const w = this.world;
+    const a = w.scores[TEAM_A];
+    const b = w.scores[TEAM_B];
+    const players = [];
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const c = this.clients[i];
+      if (c === null) continue;
+      const p = w.players[c.slot];
+      players.push({ slot: c.slot, name: c.name, brawler: p.brawlerId, team: p.team, kills: p.kills, deaths: p.deaths });
+    }
+    const message = makeResults(a > b ? TEAM_A : b > a ? TEAM_B : ROUND_DRAW, a, b, players);
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const c = this.clients[i];
+      if (c !== null) c.send(message);
+    }
   }
 
   broadcastRoster() {
