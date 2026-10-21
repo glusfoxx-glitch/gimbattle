@@ -10,8 +10,10 @@ import {
   PONG_MESSAGE_BYTES, MAX_NAME_LENGTH, MAX_ROOM_LENGTH, DEFAULT_ROOM, TEAM_B, TEAM_BOTS,
   PF_DEAD, PF_STUNNED, PF_SLOWED, PF_SPEED, PF_INVISIBLE, PF_BLIND, PF_SHIELD, PF_DASH, PF_AIRBORNE, PF_TEAM_B,
   BF_STUNNED, BF_SLOWED, BF_BLIND, EVENT, FLOAT_ZERO,
+  HIDE_SEE_DISTANCE, ROUND_DURATION_CHOICES_MIN, MAP_MODE_BOTH,
 } from './constants.js';
 import { BRAWLER_COUNT } from './brawlers.js';
+import { inHideout } from './arena.js';
 
 /** @typedef {import('./world.js').World} World */
 /** @typedef {import('./world.js').Player} Player */
@@ -382,11 +384,12 @@ export function encodeSnapshot(w, world, ctx) {
   } else {
     w.u8(REF_NONE);
   }
-  writePlayers(w, world, viewerTeam);
+  const seer = viewer !== null && viewer.active ? viewer : null;
+  writePlayers(w, world, viewerTeam, seer);
   writeBots(w, world);
   writeProjectiles(w, world);
   writeZones(w, world);
-  return writeEvents(w, world, ctx.eventFrom, viewerTeam);
+  return writeEvents(w, world, ctx.eventFrom, viewerTeam, seer);
 }
 
 /**
