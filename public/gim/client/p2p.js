@@ -13,15 +13,26 @@ import {
   RATE_LIMIT_BURST, RATE_LIMIT_PER_SEC, INVALID_LOG_INTERVAL_MS, MS_PER_SECOND, LEAVE_GRACE_MS, MAX_PLAYERS,
 } from '../shared/constants.js';
 import {
-  ByteReader, ByteWriter, decodeInput, decodePing, encodePong, takeBytes, parseClientText, makeError,
+  ByteReader, ByteWriter, decodeInput, decodePing, encodePong, takeBytes, parseClientText, makeError, makeLobby,
 } from '../shared/protocol.js';
 import { createInput } from '../shared/simulation.js';
 import { Room, InputQueue } from '../server/room.js';
 
 const PEER_PREFIX = 'gimbattle-v1-';
 /** Invité : délai avant de retenter une mise en relation restée bloquée, et nombre d'essais. */
-const GUEST_ATTEMPT_TIMEOUT_MS = 6000;
-const GUEST_CONNECT_ATTEMPTS = 3;
+// Un téléphone en 4G (souvent un iPhone) passe par un relais et met parfois plus de 6 s : on lui laisse le temps.
+const GUEST_ATTEMPT_TIMEOUT_MS = 11000;
+const GUEST_CONNECT_ATTEMPTS = 4;
+/** Serveurs STUN/TURN : plusieurs adresses, dont un relais TURN joignable par TCP pour les réseaux mobiles stricts. */
+const PEER_OPTIONS = {
+  config: {
+    iceServers: [
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
+    ],
+    sdpSemantics: 'unified-plan',
+  },
+};
 
 /**
  * @typedef {Object} P2PSocket
@@ -112,6 +123,13 @@ export class HostServer {
   /** @param {string} roomId */
   constructor(roomId) {
     this.room = new Room(roomId, (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
+    /** Salon d'attente : la partie ne démarre que quand l'hôte clique sur Lancer. */
+    this.lobby = true;
+    /** @type {ClientConn[]} */
+    this.members = [];
+    /** @type {ClientConn|null} */
+    this.hostClient = null;
+    this.settings = { minutes: 3, map: 0 };
     this.nextId = 1;
     this.reader = new ByteReader(MAX_BINARY_MESSAGE_BYTES);
     this.pongWriter = new ByteWriter(MAX_BINARY_MESSAGE_BYTES);
@@ -145,6 +163,11 @@ export class HostServer {
 
   /** @param {ClientConn} client */
   leave(client) {
+    const index = this.members.indexOf(client);
+    if (index >= 0) {
+      this.members.splice(index, 1);
+      this.broadcastLobby();
+    }
     if (client.room === null) return;
     client.room.removeClient(client);
     client.leftAt = performance.now();
@@ -187,12 +210,62 @@ export class HostServer {
     if (text.length > MAX_TEXT_MESSAGE_BYTES) { client.reject(`texte de ${text.length} octets`); return; }
     const msg = parseClientText(text);
     if (msg === null) { client.reject('JSON invalide ou schéma incorrect'); return; }
-    if (msg.t === 'pick') { this.room.pickBrawler(client, msg.brawler); return; }
+    if (msg.t === 'pick') {
+      if (this.lobby) {
+        if (this.members.includes(client)) { client.brawlerId = msg.brawler; this.broadcastLobby(); }
+      } else {
+        this.room.pickBrawler(client, msg.brawler);
+      }
+      return;
+    }
+    if (msg.t === 'settings') {
+      if (!this.lobby || client !== this.hostClient) { client.reject("réglages réservés à l'hôte"); return; }
+      this.settings = { minutes: msg.minutes, map: msg.map };
+      this.broadcastLobby();
+      return;
+    }
+    if (msg.t === 'start') {
+      if (!this.lobby || client !== this.hostClient) { client.reject("lancement réservé à l'hôte"); return; }
+      this.startGame();
+      return;
+    }
     this.leave(client);
     if (msg.t === 'leave') return;
+    if (this.lobby) {
+      if (this.members.length >= MAX_PLAYERS) { client.send(makeError(`Partie pleine : ${MAX_PLAYERS} joueurs maximum.`)); return; }
+      client.name = msg.name;
+      client.brawlerId = msg.brawler;
+      this.members.push(client);
+      this.broadcastLobby();
+      return;
+    }
     if (this.room.addClient(client, msg.name, msg.brawler) < 0) {
       client.send(makeError(`Partie pleine : ${MAX_PLAYERS} joueurs maximum.`));
     }
+  }
+
+  broadcastLobby() {
+    if (!this.lobby) return;
+    const players = this.members.map((m) => ({ id: m.id, name: m.name, brawler: m.brawlerId }));
+    const hostId = this.hostClient !== null ? this.hostClient.id : -1;
+    for (const m of this.members) m.send(makeLobby(m.id, hostId, players, this.settings));
+  }
+
+  /** L'hôte lance : réglages appliqués, ordre tiré au sort (équipes aléatoires), tout le monde entre en même temps. */
+  startGame() {
+    this.lobby = false;
+    this.room.configure(this.settings.minutes, this.settings.map);
+    const order = this.members.slice();
+    this.members = [];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+    }
+    const now = performance.now();
+    this.lastLoop = now;
+    this.simTime = now;
+    this.accumulator = 0;
+    for (const m of order) this.room.addClient(m, m.name, m.brawlerId);
   }
 
   loop() {
@@ -204,6 +277,7 @@ export class HostServer {
   step() {
     if (!this.running) return;
     const now = performance.now();
+    if (this.lobby) { this.lastLoop = now; return; }
     this.accumulator += now - this.lastLoop;
     this.lastLoop = now;
     let ticks = 0;
@@ -236,7 +310,7 @@ export function createHostSocket(room) {
   let self = null;
   /** @type {Set<any>} */
   const guests = new Set();
-  const peer = new Peer(PEER_PREFIX + room);
+  const peer = new Peer(PEER_PREFIX + room, PEER_OPTIONS);
 
   peer.on('open', () => {
     // PeerJS émet aussi open après une reconnexion au service de rendez-vous.
@@ -325,7 +399,7 @@ export function createGuestSocket(room) {
   // si le canal ne s'ouvre pas vite, on recommence avec une connexion neuve au lieu d'attendre indéfiniment.
   const attempt = () => {
     attempts++;
-    const p = new Peer();
+    const p = new Peer(PEER_OPTIONS);
     peer = p;
     const retry = (/** @type {string} */ message) => {
       if (closed || opened || peer !== p) return;
