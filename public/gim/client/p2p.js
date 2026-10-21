@@ -116,7 +116,19 @@ class HostServer {
     this.accumulator = 0;
     /** @type {ReturnType<typeof setTimeout>|null} */
     this.timer = null;
-    this.loop();
+    /** @type {Worker|null} */
+    this.ticker = null;
+    // Horloge dans un Worker : régulière même si l'onglet de l'hôte est chargé ou en arrière-plan
+    // (les minuteurs de la page sont ralentis par le navigateur, ce qui faisait « glisser » les persos).
+    try {
+      const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${Math.max(1, Math.floor(TICK_MS / 4))});`], { type: 'text/javascript' }));
+      this.ticker = new Worker(url);
+      URL.revokeObjectURL(url);
+      this.ticker.onmessage = () => this.step();
+    } catch {
+      this.ticker = null;
+    }
+    if (this.ticker === null) this.loop();
   }
 
   /** @param {(data: ArrayBuffer|string) => void} sendFn @returns {ClientConn} */
@@ -177,6 +189,12 @@ class HostServer {
 
   loop() {
     if (!this.running) return;
+    this.step();
+    this.timer = setTimeout(() => this.loop(), Math.max(0, TICK_MS - this.accumulator));
+  }
+
+  step() {
+    if (!this.running) return;
     const now = performance.now();
     this.accumulator += now - this.lastLoop;
     this.lastLoop = now;
@@ -187,12 +205,12 @@ class HostServer {
       ticks++;
     }
     if (this.accumulator >= TICK_MS) this.accumulator = 0;
-    this.timer = setTimeout(() => this.loop(), Math.max(0, TICK_MS - this.accumulator));
   }
 
   stop() {
     this.running = false;
     if (this.timer !== null) clearTimeout(this.timer);
+    if (this.ticker !== null) this.ticker.terminate();
   }
 }
 

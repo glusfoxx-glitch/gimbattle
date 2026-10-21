@@ -211,6 +211,9 @@ function chargeContacts(world, bot, type) {
  * @param {World} world @param {Bot} bot @param {ProfDef} type
  */
 function chase(world, bot, type) {
+  steer.x = 0;
+  steer.y = 0;
+  if (bot.blindMs > 0) { bot.targetRef = REF_NONE; bot.state = BOT_STATE.IDLE; return; }
   bot.retargetTicks--;
   if (bot.retargetTicks <= 0 || !isValidTarget(world, bot.targetRef)) {
     bot.targetRef = findTarget(world, bot);
@@ -227,7 +230,7 @@ function chase(world, bot, type) {
   const angle = Math.atan2(dy, dx);
   const los = hasLineOfSight(bot.x, bot.y, target.x, target.y, world.arena);
   if (bot.cooldownMs <= 0) {
-    const meleeReady = type.behavior === BOT_BEHAVIOR.MELEE && dist <= type.detectRange + target.radius;
+    const meleeReady = type.behavior === BOT_BEHAVIOR.MELEE && dist <= type.detectRange + target.radius && los;
     const chargeReady = type.behavior === BOT_BEHAVIOR.CHARGE && dist <= type.detectRange && los;
     if (meleeReady || chargeReady) { startWindup(world, bot, type, angle); return; }
   }
@@ -248,6 +251,7 @@ function stepBot(world, bot, dtMs) {
   bot.cooldownMs = decay(bot.cooldownMs, dtMs);
   bot.stateMs = decay(bot.stateMs, dtMs);
   const dt = dtMs / MS_PER_SECOND;
+  let chargeEnds = false;
   let vx = 0;
   let vy = 0;
   if (bot.stunMs > 0) {
@@ -257,7 +261,7 @@ function stepBot(world, bot, dtMs) {
   } else if (bot.state === BOT_STATE.CHARGE) {
     vx = bot.chargeDirX * type.chargeSpeed;
     vy = bot.chargeDirY * type.chargeSpeed;
-    if (bot.stateMs <= 0) enterRecover(bot, type);
+    if (bot.stateMs <= 0) chargeEnds = true;
   } else if (bot.state === BOT_STATE.RECOVER) {
     if (bot.stateMs <= 0) bot.state = BOT_STATE.CHASE;
   } else {
@@ -286,6 +290,8 @@ function stepBot(world, bot, dtMs) {
       bot.stunMs = BOT_WALL_STUN_MS;
       enterRecover(bot, type);
       emitEvent(world, EVENT.IMPACT, bot.ref, REF_NONE, 0, bot.x, bot.y, 0, bot.angle);
+    } else if (chargeEnds) {
+      enterRecover(bot, type);
     }
   }
 }
