@@ -11,3 +11,5 @@
 
 - The game lives as untouched vanilla JS in public/gim/ (client, shared, server/room.js) and is shown full-screen by src/routes/index.tsx via iframe; keep game logic identical to the original archive.
 - Multiplayer is peer-to-peer WebRTC (public/gim/client/p2p.js): the host's browser runs the authoritative Room, guests connect by room code through PeerJS signaling — there is no backend server.
+- The host Room advances each player's simulation only with that player's inputs (short starvation waits, then neutral steps) so client prediction matches the server exactly; Net resets input sequence and clock on every new session.
+- Automated game tests live in gim-tests/ (run: `node gim-tests/selftest.mjs`, `node --import ./gim-tests/register.mjs gim-tests/run-netsim.mjs` and `.../run-abilities.mjs`); they drive the real Room/Net code over a simulated network and must pass after any game or network change.

@@ -5,6 +5,7 @@
 - [x] Fix bot (prof) bugs (strike lands where announced)
 - [x] Fix character moving on its own / teleporting (input timing, sequence reset on rejoin)
 - [x] Test every character ability (automated bench)
-- [ ] Two-browser end-to-end test incl. leave/rejoin
-- [ ] Make "Héberger / Rejoindre" choice clearly visible on mobile and desktop (mobile shows wrong label)
-- [ ] Final French report to the user
+- [x] Two-browser end-to-end test incl. leave/rejoin
+- [x] Make "Créer / Rejoindre" choice clearly visible on mobile and desktop
+- [x] Guest connection auto-retry (1 in 6 attempts used to hang)
+- [x] Final French report to the user
