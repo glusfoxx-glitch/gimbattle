@@ -53,7 +53,7 @@ import { createHostSocket, createGuestSocket } from './p2p.js';
  * @property {PlayerView[]} players @property {BotView[]} bots
  * @property {ProjectileView[]} projectiles @property {number} projectileCount
  * @property {ZoneView[]} zones @property {number} zoneCount
- * @property {number} roundPhase @property {number} roundMs @property {number} scoreA @property {number} scoreB
+ * @property {number} roundPhase @property {number} mapId @property {number} roundMs @property {number} scoreA @property {number} scoreB
  * @property {number} localSlot @property {number} localTeam @property {number} serverTick
  */
 /**
@@ -141,7 +141,7 @@ export class Net {
       projectileCount: 0,
       zones: fill(MAX_ZONES, () => ({ id: 0, visual: 0, x: FLOAT_ZERO, y: FLOAT_ZERO, radius: FLOAT_ZERO, life: FLOAT_ZERO })),
       zoneCount: 0,
-      roundPhase: 0, roundMs: FLOAT_ZERO, scoreA: 0, scoreB: 0, localSlot: -1, localTeam: TEAM_A, serverTick: 0,
+      roundPhase: 0, mapId: 0, roundMs: FLOAT_ZERO, scoreA: 0, scoreB: 0, localSlot: -1, localTeam: TEAM_A, serverTick: 0,
     };
     /** Table identifiant réseau → index dans le snapshot précédent (évite une recherche quadratique). */
     this.idToIndex = new Int16Array(NET_ID_MASK + 1).fill(-1);
@@ -512,6 +512,7 @@ export class Net {
     if (latest === null) return;
     const views = this.views;
     views.roundPhase = latest.roundPhase;
+    views.mapId = latest.mapId;
     views.roundMs = latest.roundMs;
     views.scoreA = latest.scoreA;
     views.scoreB = latest.scoreB;
