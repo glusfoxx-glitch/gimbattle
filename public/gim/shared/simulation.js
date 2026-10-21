@@ -16,8 +16,9 @@ import {
   MS_PER_SECOND, REF_NONE, BOT_REF_BASE, MAX_PLAYERS, MAX_BOTS, TEAM_A, TEAM_B, TEAM_BOTS, EVENT, ZONE_TICK_MS,
   ROUND_PHASE_PLAYING, ROUND_PHASE_ENDED, ROUND_DURATION_MS, ROUND_END_PAUSE_MS, ROUND_DRAW,
   SPAWN_SHIELD_MS, REGEN_DELAY_MS, REGEN_FRACTION_PER_SEC, BOT_FIRST_SPAWN_MS, NAV_UPDATE_TICKS, CONTACT_MARGIN,
-  BEAM_LENGTH_SCALE, COLLISION_EPSILON, HALF, FLOAT_ZERO,
+  BEAM_LENGTH_SCALE, COLLISION_EPSILON, HALF, FLOAT_ZERO, HIDE_REVEAL_MS, HIDE_SEE_DISTANCE,
 } from './constants.js';
+import { inHideout } from './arena.js';
 import { BRAWLERS, getAttack } from './brawlers.js';
 import { resolveCircle, clamp, raycast, circleBlocked, distanceToSegmentSq, angleDelta, hasLineOfSight } from './physics.js';
 import { emitEvent, getEntity } from './world.js';

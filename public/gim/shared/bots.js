@@ -43,7 +43,8 @@ function cellIndex(nav, x, y) {
 function isValidTarget(world, ref) {
   if (ref === REF_NONE || ref >= MAX_PLAYERS) return false;
   const p = world.players[ref];
-  return p.active && !p.dead && p.invisMs <= 0 && p.leapMs <= 0;
+  // Caché dans les manteaux (sans avoir attaqué) : les profs ne le voient pas.
+  return p.active && !p.dead && p.invisMs <= 0 && p.leapMs <= 0 && !(p.revealMs <= 0 && inHideout(world.arena, p.x, p.y));
 }
 
 /**
