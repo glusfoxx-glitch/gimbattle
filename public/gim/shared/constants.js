@@ -298,7 +298,7 @@ export const AIM_LINE_WIDTH = 0.5;
 /** Le canvas WebGL sert de « tableau noir » derrière le menu. */
 export const MENU_BG_COLOR = 0x1e3b2f;
 export const PREVIEW_BG_COLOR = 0x24493a;
-export const CONNECT_TIMEOUT_MS = 15000;
+export const CONNECT_TIMEOUT_MS = 20000;
 export const PREVIEW_SPIN_SPEED = 0.6;
 export const PREVIEW_ATTACK_EVERY_S = 2.5;
 export const TEAM_CSS = Object.freeze(['#3d8bff', '#ff4d5e', '#ffa62b']);
