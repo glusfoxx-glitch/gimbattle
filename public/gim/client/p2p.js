@@ -187,6 +187,7 @@ export class HostServer {
     if (text.length > MAX_TEXT_MESSAGE_BYTES) { client.reject(`texte de ${text.length} octets`); return; }
     const msg = parseClientText(text);
     if (msg === null) { client.reject('JSON invalide ou schéma incorrect'); return; }
+    if (msg.t === 'pick') { this.room.pickBrawler(client, msg.brawler); return; }
     this.leave(client);
     if (msg.t === 'leave') return;
     if (this.room.addClient(client, msg.name, msg.brawler) < 0) {

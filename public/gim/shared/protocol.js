@@ -597,7 +597,7 @@ export function sanitizeRoom(value) {
 /**
  * Valide un message texte venant d'un client. Tout champ inattendu ou mal typé = rejet.
  * @param {string} text
- * @returns {JoinRequest|LeaveRequest|null}
+ * @returns {JoinRequest|LeaveRequest|{t:'pick',brawler:number}|null}
  */
 export function parseClientText(text) {
   /** @type {any} */
@@ -605,6 +605,10 @@ export function parseClientText(text) {
   try { data = JSON.parse(text); } catch { return null; }
   if (data === null || typeof data !== 'object' || Array.isArray(data)) return null;
   if (data.t === 'leave') return { t: 'leave' };
+  if (data.t === 'pick') {
+    if (!Number.isInteger(data.brawler) || data.brawler < 0 || data.brawler >= BRAWLER_COUNT) return null;
+    return { t: 'pick', brawler: data.brawler };
+  }
   if (data.t !== 'join') return null;
   if (!Number.isInteger(data.brawler) || data.brawler < 0 || data.brawler >= BRAWLER_COUNT) return null;
   return { t: 'join', name: sanitizeName(data.name), brawler: data.brawler, room: sanitizeRoom(data.room) };
@@ -613,6 +617,21 @@ export function parseClientText(text) {
 /** @param {string} name @param {number} brawler @param {string} room @returns {string} */
 export function makeJoin(name, brawler, room) {
   return JSON.stringify({ t: 'join', name, brawler, room });
+}
+
+/** Changement de perso pendant l'écran de fin de manche. @param {number} brawler @returns {string} */
+export function makePick(brawler) {
+  return JSON.stringify({ t: 'pick', brawler });
+}
+
+/**
+ * Tableau des scores de fin de manche.
+ * @param {number} winner @param {number} scoreA @param {number} scoreB
+ * @param {{slot:number,name:string,brawler:number,team:number,kills:number,deaths:number}[]} players
+ * @returns {string}
+ */
+export function makeResults(winner, scoreA, scoreB, players) {
+  return JSON.stringify({ t: 'results', winner, scoreA, scoreB, players });
 }
 
 /** @returns {string} */
