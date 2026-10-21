@@ -15,6 +15,7 @@ import { resolveCircle, hasLineOfSight, angleDelta } from './physics.js';
 import { emitEvent, countActivePlayers } from './world.js';
 import { queryTargets, damageEntity, applyEffects, hitArea, QUERY_ENEMIES } from './combat.js';
 import { nextInt } from './rng.js';
+import { inHideout } from './arena.js';
 
 /** @typedef {import('./world.js').World} World */
 /** @typedef {import('./world.js').Bot} Bot */

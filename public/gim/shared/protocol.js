@@ -251,23 +251,30 @@ function writeSelf(w, p) {
 
 /**
  * Un joueur invisible n'est PAS envoyé à ses ennemis : un client triché ne peut pas le révéler.
- * @param {Player} p @param {number} viewerTeam
+ * @param {Player} p @param {number} viewerTeam @param {World} world @param {Player|null} viewer
  * @returns {boolean}
  */
-function isVisibleTo(p, viewerTeam) {
-  return p.invisMs <= 0 || p.team === viewerTeam;
+function isVisibleTo(p, viewerTeam, world, viewer) {
+  if (p.team === viewerTeam) return true;
+  if (p.invisMs > 0) return false;
+  // Caché dans les portemanteaux : seul un ennemi tout proche le voit (comme les buissons de Brawl Stars).
+  if (p.revealMs > 0 || world.arena.hideouts.length === 0 || !inHideout(world.arena, p.x, p.y)) return true;
+  if (viewer === null || !viewer.active || viewer.dead) return false;
+  const dx = viewer.x - p.x;
+  const dy = viewer.y - p.y;
+  return dx * dx + dy * dy <= HIDE_SEE_DISTANCE * HIDE_SEE_DISTANCE;
 }
 
 /**
  * @param {ByteWriter} w @param {World} world @param {number} viewerTeam
  */
-function writePlayers(w, world, viewerTeam) {
+function writePlayers(w, world, viewerTeam, viewer) {
   const countOffset = w.offset;
   w.u8(0);
   let count = 0;
   for (let i = 0; i < MAX_PLAYERS; i++) {
     const p = world.players[i];
-    if (!p.active || !isVisibleTo(p, viewerTeam)) continue;
+    if (!p.active || !isVisibleTo(p, viewerTeam, world, viewer)) continue;
     w.u8(p.slot); w.u8(p.brawlerId); w.i16(quantPos(p.x)); w.i16(quantPos(p.y));
     w.u16(quantAngle(p.aimAngle)); w.u16(clampUint(p.hp, UINT16_MAX)); w.u16(playerFlags(p)); w.u8(leapProgress(p));
     count++;
@@ -323,7 +330,7 @@ function writeZones(w, world) {
  * @param {ByteWriter} w @param {World} world @param {number} fromId @param {number} viewerTeam
  * @returns {number} Identifiant du prochain événement à envoyer.
  */
-function writeEvents(w, world, fromId, viewerTeam) {
+function writeEvents(w, world, fromId, viewerTeam, viewer) {
   let start = Math.max(fromId, world.eventHead - EVENT_RING_SIZE, world.eventHead - MAX_EVENTS_PER_SNAPSHOT);
   const countOffset = w.offset;
   w.u8(0);
@@ -331,9 +338,9 @@ function writeEvents(w, world, fromId, viewerTeam) {
   for (let id = start; id < world.eventHead; id++) {
     const e = world.events[id % EVENT_RING_SIZE];
     // Une attaque d'un ennemi invisible ne doit pas trahir sa position.
-    if (e.type === EVENT.ATTACK && e.a < MAX_PLAYERS && !isVisibleTo(world.players[e.a], viewerTeam)) continue;
+    if (e.type === EVENT.ATTACK && e.a < MAX_PLAYERS && !isVisibleTo(world.players[e.a], viewerTeam, world, viewer)) continue;
     // Pareil pour un joueur invisible touché ou soigné : l'événement donnerait sa position exacte.
-    if ((e.type === EVENT.HIT || e.type === EVENT.HEAL) && e.b < MAX_PLAYERS && !isVisibleTo(world.players[e.b], viewerTeam)) continue;
+    if ((e.type === EVENT.HIT || e.type === EVENT.HEAL) && e.b < MAX_PLAYERS && !isVisibleTo(world.players[e.b], viewerTeam, world, viewer)) continue;
     w.u8(e.type); w.u8(e.a); w.u8(e.b); w.u8(e.c);
     w.i16(quantPos(e.x)); w.i16(quantPos(e.y)); w.i16(clampInt16(e.value)); w.u16(quantAngle(e.angle));
     count++;
@@ -363,6 +370,7 @@ export function encodeSnapshot(w, world, ctx) {
   w.f64(ctx.serverTime);
   w.u32(ctx.ackSeq >>> 0);
   w.u8(world.roundPhase);
+  w.u8(world.arena.id);
   w.u32(clampUint(world.roundMs, 0xffffffff));
   w.u16(clampUint(world.scores[0], UINT16_MAX));
   w.u16(clampUint(world.scores[1], UINT16_MAX));
@@ -436,7 +444,7 @@ export function takeBytes(w) {
 /**
  * @typedef {Object} Snapshot
  * @property {number} tick @property {number} serverTime @property {number} ackSeq
- * @property {number} roundPhase @property {number} roundMs @property {number} scoreA @property {number} scoreB
+ * @property {number} roundPhase @property {number} mapId @property {number} roundMs @property {number} scoreA @property {number} scoreB
  * @property {number} selfSlot @property {SelfState} self
  * @property {number} playerCount @property {NetPlayer[]} players
  * @property {number} botCount @property {NetBot[]} bots
@@ -460,7 +468,7 @@ function fill(n, factory) {
 /** @returns {Snapshot} Structure pré-allouée, remplie en place à chaque réception. */
 export function createSnapshot() {
   return {
-    tick: 0, serverTime: FLOAT_ZERO, ackSeq: 0, roundPhase: 0, roundMs: FLOAT_ZERO, scoreA: 0, scoreB: 0, selfSlot: REF_NONE,
+    tick: 0, serverTime: FLOAT_ZERO, ackSeq: 0, roundPhase: 0, mapId: 0, roundMs: FLOAT_ZERO, scoreA: 0, scoreB: 0, selfSlot: REF_NONE,
     self: {
       x: FLOAT_ZERO, y: FLOAT_ZERO, kbVX: FLOAT_ZERO, kbVY: FLOAT_ZERO, hp: FLOAT_ZERO, dead: false, respawnMs: FLOAT_ZERO, attackCdMs: FLOAT_ZERO, superCharge: FLOAT_ZERO,
       stunMs: FLOAT_ZERO, slowMs: FLOAT_ZERO, slowFactor: 1, speedBuffMs: FLOAT_ZERO, speedMul: 1, invisMs: FLOAT_ZERO, blindMs: FLOAT_ZERO, shieldMs: FLOAT_ZERO,
@@ -511,7 +519,7 @@ function readCount(r, capacity) {
 export function decodeSnapshot(r, s) {
   r.offset = 1;
   s.tick = r.u32(); s.serverTime = r.f64(); s.ackSeq = r.u32();
-  s.roundPhase = r.u8(); s.roundMs = r.u32(); s.scoreA = r.u16(); s.scoreB = r.u16();
+  s.roundPhase = r.u8(); s.mapId = r.u8(); s.roundMs = r.u32(); s.scoreA = r.u16(); s.scoreB = r.u16();
   s.selfSlot = r.u8();
   if (s.selfSlot !== REF_NONE) readSelf(r, s.self);
   let n = readCount(r, MAX_PLAYERS);
@@ -609,6 +617,12 @@ export function parseClientText(text) {
     if (!Number.isInteger(data.brawler) || data.brawler < 0 || data.brawler >= BRAWLER_COUNT) return null;
     return { t: 'pick', brawler: data.brawler };
   }
+  if (data.t === 'start') return { t: 'start' };
+  if (data.t === 'settings') {
+    if (!ROUND_DURATION_CHOICES_MIN.includes(data.minutes)) return null;
+    if (!Number.isInteger(data.map) || data.map < 0 || data.map > MAP_MODE_BOTH) return null;
+    return { t: 'settings', minutes: data.minutes, map: data.map };
+  }
   if (data.t !== 'join') return null;
   if (!Number.isInteger(data.brawler) || data.brawler < 0 || data.brawler >= BRAWLER_COUNT) return null;
   return { t: 'join', name: sanitizeName(data.name), brawler: data.brawler, room: sanitizeRoom(data.room) };
@@ -632,6 +646,31 @@ export function makePick(brawler) {
  */
 export function makeResults(winner, scoreA, scoreB, players) {
   return JSON.stringify({ t: 'results', winner, scoreA, scoreB, players });
+}
+
+/** Hôte : lance la partie depuis le salon d'attente. @returns {string} */
+export function makeStart() {
+  return JSON.stringify({ t: 'start' });
+}
+
+/** Hôte : réglages de la partie. @param {number} minutes @param {number} map @returns {string} */
+export function makeSettings(minutes, map) {
+  return JSON.stringify({ t: 'settings', minutes, map });
+}
+
+/**
+ * État du salon d'attente envoyé à chacun (you = son identifiant, host = celui de l'hôte).
+ * @param {number} you @param {number} host @param {{id:number,name:string,brawler:number}[]} players
+ * @param {{minutes:number,map:number}} settings
+ * @returns {string}
+ */
+export function makeLobby(you, host, players, settings) {
+  return JSON.stringify({ t: 'lobby', you, host, players, minutes: settings.minutes, map: settings.map });
+}
+
+/** Nouvelle équipe après le tirage au sort de début de manche. @param {number} team @returns {string} */
+export function makeTeam(team) {
+  return JSON.stringify({ t: 'team', team });
 }
 
 /** @returns {string} */
