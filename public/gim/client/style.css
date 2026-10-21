@@ -441,5 +441,14 @@ html, body {
 @media (max-height: 480px) {
   .results-card { padding: 10px 12px; }
   .podium-1 .podium-block { height: 48px; } .podium-2 .podium-block { height: 36px; } .podium-3 .podium-block { height: 26px; }
-  .score-table { font-size: 12px; }
+  .score-table { font-size: 12px; margin-bottom: 6px; }
+  .score-table td, .score-table th { padding: 2px 4px; }
+  .results-title { font-size: 20px; }
+  .results-score { font-size: 16px; margin: 0 0 4px; }
+  .podium { margin: 2px 0 6px; }
+  .podium-hero { display: none; }
+  .podium-block { font-size: 18px; }
+  .results-sub { font-size: 16px; margin: 2px 0 4px; }
+  .pick-opt { font-size: 12px; padding: 4px 9px; }
+  .results-count { margin: 6px 0 4px; }
 }
