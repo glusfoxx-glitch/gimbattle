@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1e3b2f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>GIM Battle</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Caveat+Brush&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js sans étape de build : copie locale si « npm run vendor » a été lancé, sinon le serveur redirige vers le CDN. -->
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" } }</script>
+</head>
+<body>
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <canvas id="hud" aria-label="Arène de jeu"></canvas>
+  <button id="menu-btn" class="ingame-btn" type="button" hidden>Menu</button>
+
+  <main id="menu" class="menu">
+    <header class="menu-top">
+      <div class="brand">
+        <h1 class="title">GIM Battle</h1>
+        <p class="tagline">Bleus contre Rouges, et les profs qui rôdent entre les tables.</p>
+      </div>
+      <form id="join-form" class="join" autocomplete="off">
+        <label class="field">
+          <span class="hand">Pseudo</span>
+          <input id="name-input" name="name" maxlength="16" placeholder="Ton pseudo" enterkeyhint="go">
+        </label>
+        <label class="field field-room">
+          <span class="hand">Code</span>
+          <input id="room-input" name="room" maxlength="16" placeholder="ton code" enterkeyhint="go">
+        </label>
+        <label class="field field-room">
+          <span class="hand">Partie</span>
+          <select id="mode-input" name="mode">
+            <option value="host">Héberger</option>
+            <option value="join">Rejoindre</option>
+          </select>
+        </label>
+        <button id="play-btn" class="play" type="submit">Jouer</button>
+      </form>
+    </header>
+
+    <section class="roster" aria-labelledby="roster-title">
+      <h2 id="roster-title" class="hand section-title">La classe</h2>
+      <div id="brawler-grid" class="grid"></div>
+      <h2 class="hand section-title profs-title">Les profs <small>s'en prennent à tout le monde</small></h2>
+      <div id="prof-grid" class="grid grid-profs"></div>
+    </section>
+
+    <section class="stage" aria-live="polite">
+      <div id="preview" class="preview"></div>
+      <p id="sel-role" class="hand role"></p>
+      <h2 id="sel-name" class="name"></h2>
+    </section>
+
+    <section class="sheet" aria-live="polite">
+      <div id="sel-stats" class="stats"></div>
+      <article class="ability" id="main-block">
+        <span class="margin-note hand">attaque</span>
+        <h3 id="main-name"></h3>
+        <p id="main-desc"></p>
+        <p id="main-figures" class="figures"></p>
+      </article>
+      <article class="ability" id="super-block">
+        <span class="margin-note hand">super</span>
+        <h3 id="super-name"></h3>
+        <p id="super-desc"></p>
+        <p id="super-figures" class="figures"></p>
+      </article>
+    </section>
+
+    <footer class="menu-bottom">
+      <p id="menu-status" class="status" role="status"></p>
+      <p class="help">
+        <strong>Sur PC :</strong> ZQSD ou WASD pour bouger, la souris pour viser, clic pour attaquer, clic droit ou Espace pour la super.
+        <strong>Sur téléphone :</strong> joystick gauche pour bouger, glisse puis relâche le joystick droit pour tirer (un simple tap vise tout seul), bouton Super.
+        F3 affiche les infos techniques, M coupe le son.
+      </p>
+    </footer>
+  </main>
+
+  <div id="rotate-hint" class="rotate-hint">Tourne ton téléphone en mode paysage</div>
+  <div id="boot-error" class="boot-error" hidden></div>
+
+  <script>
+    // Garde-fou : si le module principal ne démarre pas (Three.js injoignable, navigateur trop ancien), on le dit clairement.
+    setTimeout(function () {
+      if (window.gimReady) return;
+      var box = document.getElementById('boot-error');
+      box.textContent = "Le jeu n'a pas pu démarrer. Vérifie la connexion internet (Three.js vient du CDN) puis recharge la page.";
+      box.hidden = false;
+    }, 12000);
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

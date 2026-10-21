@@ -1,0 +1,192 @@
+/**
+ * Un salon = un monde simulé + ses clients. Le serveur fait autorité :
+ * il consomme UN input par client et par tick (comme le client qui prédit), simule, puis diffuse les snapshots.
+ */
+import {
+  MAX_PLAYERS, MAX_INPUT_QUEUE, INPUT_CATCHUP_THRESHOLD, TICK_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_BUFFER_BYTES,
+  TEAM_A, TEAM_B, MAX_SEQ_JUMP,
+} from '../shared/constants.js';
+import { ARENA } from '../shared/arena.js';
+import { createWorld, countTeam } from '../shared/world.js';
+import { createRng } from '../shared/rng.js';
+import {
+  createInput, copyInput, stepPlayerSelf, applyPlayerActions, stepWorld, resolveAutoAim, activatePlayer, deactivatePlayer,
+} from '../shared/simulation.js';
+import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster } from '../shared/protocol.js';
+
+/** @typedef {import('../shared/simulation.js').PlayerInput} PlayerInput */
+
+/**
+ * File circulaire d'inputs pré-alloués (aucune allocation à la réception).
+ */
+export class InputQueue {
+  constructor() {
+    /** @type {PlayerInput[]} */
+    this.items = new Array(MAX_INPUT_QUEUE);
+    for (let i = 0; i < MAX_INPUT_QUEUE; i++) this.items[i] = createInput();
+    this.head = 0;
+    this.count = 0;
+    this.lastReceivedSeq = 0;
+  }
+  reset() {
+    this.head = 0;
+    this.count = 0;
+    this.lastReceivedSeq = 0;
+  }
+  /**
+   * @param {PlayerInput} input
+   * @returns {string|null} Raison du rejet, null si accepté.
+   */
+  push(input) {
+    if (input.seq <= this.lastReceivedSeq) return 'séquence rejouée ou désordonnée';
+    if (input.seq > this.lastReceivedSeq + MAX_SEQ_JUMP) return 'saut de séquence suspect';
+    if (this.count >= MAX_INPUT_QUEUE) return "file d'inputs pleine (débit trop élevé)";
+    copyInput(this.items[(this.head + this.count) % MAX_INPUT_QUEUE], input);
+    this.count++;
+    this.lastReceivedSeq = input.seq;
+    return null;
+  }
+  /** @returns {PlayerInput} */
+  shift() {
+    const item = this.items[this.head];
+    this.head = (this.head + 1) % MAX_INPUT_QUEUE;
+    this.count--;
+    return item;
+  }
+}
+
+/**
+ * @typedef {Object} RoomClient
+ * @property {number} slot @property {string} name @property {number} brawlerId
+ * @property {number} ackSeq @property {number} eventFrom @property {InputQueue} queue
+ * @property {Room|null} room
+ * @property {(data: ArrayBuffer|string) => void} send
+ */
+
+export class Room {
+  /**
+   * @param {string} id @param {number} seed
+   */
+  constructor(id, seed) {
+    this.id = id;
+    this.world = createWorld(ARENA);
+    this.rng = createRng(seed);
+    /** @type {(RoomClient|null)[]} */
+    this.clients = new Array(MAX_PLAYERS).fill(null);
+    this.clientCount = 0;
+    this.snapshotAccMs = 0;
+    this.rosterDirty = false;
+    this.writer = new ByteWriter(SNAPSHOT_BUFFER_BYTES);
+    this.neutralInput = createInput();
+    /** @type {import('../shared/protocol.js').SnapshotContext} */
+    this.ctx = { viewer: null, ackSeq: 0, serverTime: 0, eventFrom: 0 };
+  }
+
+  /**
+   * Ajoute un joueur dans l'équipe la moins remplie.
+   * @param {RoomClient} client @param {string} name @param {number} brawlerId
+   * @returns {number} Emplacement attribué, -1 si le salon est plein.
+   */
+  addClient(client, name, brawlerId) {
+    const slot = this.clients.indexOf(null);
+    if (slot < 0) return -1;
+    const team = countTeam(this.world, TEAM_A) <= countTeam(this.world, TEAM_B) ? TEAM_A : TEAM_B;
+    this.clients[slot] = client;
+    this.clientCount++;
+    client.room = this;
+    client.slot = slot;
+    client.name = name;
+    client.brawlerId = brawlerId;
+    client.ackSeq = 0;
+    client.queue.reset();
+    client.eventFrom = this.world.eventHead;
+    activatePlayer(this.world, slot, team, brawlerId, this.rng);
+    client.send(makeWelcome(slot, team, this.id));
+    this.rosterDirty = true;
+    return slot;
+  }
+
+  /** @param {RoomClient} client */
+  removeClient(client) {
+    if (client.room !== this || client.slot < 0) return;
+    deactivatePlayer(this.world, client.slot);
+    this.clients[client.slot] = null;
+    this.clientCount--;
+    client.slot = -1;
+    client.room = null;
+    this.rosterDirty = true;
+  }
+
+  /**
+   * Consomme les inputs d'un client. File vide = pas à vide (le temps avance, le joueur ne bouge pas) ;
+   * file trop longue = on rattrape à 2 inputs par tick pour résorber la latence accumulée.
+   * @param {RoomClient} client
+   */
+  processInputs(client) {
+    const p = this.world.players[client.slot];
+    if (client.queue.count === 0) {
+      const neutral = this.neutralInput;
+      neutral.moveX = 0;
+      neutral.moveY = 0;
+      neutral.buttons = 0;
+      neutral.aimAngle = p.aimAngle;
+      neutral.aimDist = 0;
+      applyPlayerActions(this.world, p, stepPlayerSelf(p, neutral, TICK_MS, this.world.arena), neutral);
+      return;
+    }
+    const steps = client.queue.count > INPUT_CATCHUP_THRESHOLD ? 2 : 1;
+    for (let s = 0; s < steps && client.queue.count > 0; s++) {
+      const input = client.queue.shift();
+      resolveAutoAim(this.world, p, input);
+      const flags = stepPlayerSelf(p, input, TICK_MS, this.world.arena);
+      applyPlayerActions(this.world, p, flags, input);
+      client.ackSeq = input.seq;
+    }
+  }
+
+  /** @param {number} serverTime */
+  tick(serverTime) {
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const client = this.clients[i];
+      if (client !== null) this.processInputs(client);
+    }
+    stepWorld(this.world, TICK_MS, this.rng);
+    if (this.rosterDirty) this.broadcastRoster();
+    this.snapshotAccMs += TICK_MS;
+    if (this.snapshotAccMs >= SNAPSHOT_INTERVAL_MS) {
+      this.snapshotAccMs -= SNAPSHOT_INTERVAL_MS;
+      this.sendSnapshots(serverTime);
+    }
+  }
+
+  /** @param {number} serverTime */
+  sendSnapshots(serverTime) {
+    const ctx = this.ctx;
+    ctx.serverTime = serverTime;
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const client = this.clients[i];
+      if (client === null) continue;
+      ctx.viewer = this.world.players[client.slot];
+      ctx.ackSeq = client.ackSeq;
+      ctx.eventFrom = client.eventFrom;
+      client.eventFrom = encodeSnapshot(this.writer, this.world, ctx);
+      client.send(takeBytes(this.writer));
+    }
+    ctx.viewer = null;
+  }
+
+  broadcastRoster() {
+    this.rosterDirty = false;
+    /** @type {import('../shared/protocol.js').RosterEntry[]} */
+    const players = [];
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const c = this.clients[i];
+      if (c !== null) players.push({ slot: c.slot, name: c.name, brawler: c.brawlerId, team: this.world.players[c.slot].team });
+    }
+    const message = makeRoster(players);
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const c = this.clients[i];
+      if (c !== null) c.send(message);
+    }
+  }
+}
