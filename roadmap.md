@@ -9,3 +9,5 @@
 - [x] Make "Créer / Rejoindre" choice clearly visible on mobile and desktop
 - [x] Guest connection auto-retry (1 in 6 attempts used to hang)
 - [x] Final French report to the user
+- [x] Balance patch (Yann, Vladimir, Mathéo, Mohammed, Adam, Clément, Breuer)
+- [x] End-of-round screen: scoreboard K.O./morts, podium, change character
