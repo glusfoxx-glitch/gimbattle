@@ -332,6 +332,8 @@ function writeEvents(w, world, fromId, viewerTeam) {
     const e = world.events[id % EVENT_RING_SIZE];
     // Une attaque d'un ennemi invisible ne doit pas trahir sa position.
     if (e.type === EVENT.ATTACK && e.a < MAX_PLAYERS && !isVisibleTo(world.players[e.a], viewerTeam)) continue;
+    // Pareil pour un joueur invisible touché ou soigné : l'événement donnerait sa position exacte.
+    if ((e.type === EVENT.HIT || e.type === EVENT.HEAL) && e.b < MAX_PLAYERS && !isVisibleTo(world.players[e.b], viewerTeam)) continue;
     w.u8(e.type); w.u8(e.a); w.u8(e.b); w.u8(e.c);
     w.i16(quantPos(e.x)); w.i16(quantPos(e.y)); w.i16(clampInt16(e.value)); w.u16(quantAngle(e.angle));
     count++;

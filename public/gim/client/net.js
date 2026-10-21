@@ -543,8 +543,19 @@ export class Net {
       v.visual = bp.visual;
       v.angle = bp.angle;
     }
-    this.views.projectileCount = b.projectileCount;
+    // Un projectile présent en a mais plus en b finit son trajet (sinon le molotov disparaît avant d'exploser).
+    let count = b.projectileCount;
+    for (let i = 0; i < b.projectileCount; i++) lookup[b.projectiles[i].id] = -2;
+    for (let i = 0; i < a.projectileCount && count < views.length; i++) {
+      const ap = a.projectiles[i];
+      if (lookup[ap.id] === -2) continue;
+      const v = views[count++];
+      v.x = ap.x; v.y = ap.y; v.lob = ap.lob > 0 ? lerp(ap.lob, 1, t) : 0;
+      v.id = ap.id; v.visual = ap.visual; v.angle = ap.angle;
+    }
+    this.views.projectileCount = count;
     for (let i = 0; i < a.projectileCount; i++) lookup[a.projectiles[i].id] = -1;
+    for (let i = 0; i < b.projectileCount; i++) lookup[b.projectiles[i].id] = -1;
   }
 
   /** @param {Snapshot} a @param {Snapshot} b @param {number} t */
