@@ -74,7 +74,7 @@ export const TEAM_COUNT = 2;
 export const TEAM_NAMES = Object.freeze(['BLEUS', 'ROUGES', 'PROFS']);
 
 export const ROUND_DURATION_MS = 180000;
-export const ROUND_END_PAUSE_MS = 6000;
+export const ROUND_END_PAUSE_MS = 15000;
 export const ROUND_PHASE_PLAYING = 0;
 export const ROUND_PHASE_ENDED = 1;
 export const ROUND_DRAW = 2;

@@ -183,7 +183,8 @@ function tryAttacks(p, b, input, arena) {
     startSelfPart(p, b.super, true, input, arena);
     return ACTION_FIRED_SUPER;
   }
-  if ((input.buttons & BTN_ATTACK) !== 0 && p.attackCdMs <= TIMER_EPSILON_MS) {
+  // Invisible (Yann) : pas de tir tant que l'invisibilité dure.
+  if ((input.buttons & BTN_ATTACK) !== 0 && p.attackCdMs <= TIMER_EPSILON_MS && p.invisMs <= 0) {
     p.attackCdMs = b.main.cooldownMs;
     p.shieldMs = 0;
     startSelfPart(p, b.main, false, input, arena);
