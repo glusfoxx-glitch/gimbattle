@@ -503,4 +503,6 @@ function frame(now) {
 menu.show();
 menu.setStatus(isTouch ? 'Conseil : joue en mode paysage.' : '', false);
 requestAnimationFrame(frame);
+/** Accès en lecture pour les tests automatisés (aucun effet sur le jeu). */
+window.gimNet = net;
 window.gimReady = true;
