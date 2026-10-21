@@ -28,6 +28,7 @@ import { circleBlocked } from './physics.js';
  * @property {number} leapToX @property {number} leapToY @property {boolean} leapIsSuper
  * @property {number} kbVX @property {number} kbVY @property {number} outOfCombatMs
  * @property {number} kills @property {number} deaths
+ * @property {number} revealMs  Après une attaque, visible même dans une cachette (serveur uniquement).
  */
 
 /** @param {number} slot @returns {Player} */
@@ -38,7 +39,7 @@ export function createPlayer(slot) {
     stunMs: FLOAT_ZERO, slowMs: FLOAT_ZERO, slowFactor: 1, speedBuffMs: FLOAT_ZERO, speedMul: 1, invisMs: FLOAT_ZERO, blindMs: FLOAT_ZERO,
     dashMs: FLOAT_ZERO, dashDirX: FLOAT_ZERO, dashDirY: FLOAT_ZERO, dashSpeed: FLOAT_ZERO, dashIsSuper: false, dashing: false, dashHitPlayers: 0, dashHitBots: 0,
     leapMs: FLOAT_ZERO, leapTotalMs: 1, leapFromX: FLOAT_ZERO, leapFromY: FLOAT_ZERO, leapToX: FLOAT_ZERO, leapToY: FLOAT_ZERO, leapIsSuper: false,
-    kbVX: FLOAT_ZERO, kbVY: FLOAT_ZERO, outOfCombatMs: FLOAT_ZERO, kills: 0, deaths: 0,
+    kbVX: FLOAT_ZERO, kbVY: FLOAT_ZERO, outOfCombatMs: FLOAT_ZERO, kills: 0, deaths: 0, revealMs: FLOAT_ZERO,
   };
 }
 
@@ -164,9 +165,20 @@ export function createWorld(arena) {
     events, eventHead: 0,
     scores: new Int32Array(TEAM_COUNT),
     roundPhase: ROUND_PHASE_PLAYING, roundMs: ROUND_DURATION_MS, botSpawnMs: BOT_FIRST_SPAWN_MS,
+    roundDurationMs: ROUND_DURATION_MS,
     nav: createNavGrid(arena),
     queryRefs: new Int32Array(MAX_PLAYERS + MAX_BOTS), queryCount: 0,
   };
+}
+
+/**
+ * Change de carte (entre deux manches) : la grille de navigation des profs est recalculée.
+ * @param {World} world @param {Arena} arena
+ */
+export function setWorldArena(world, arena) {
+  if (world.arena === arena) return;
+  world.arena = arena;
+  world.nav = createNavGrid(arena);
 }
 
 /**
