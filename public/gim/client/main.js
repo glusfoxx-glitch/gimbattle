@@ -76,6 +76,9 @@ let state = STATE_MENU;
 let lastFrame = performance.now();
 let accumulator = FLOAT_ZERO;
 let superWasReady = false;
+/** Dernier tir prédit localement : l'événement serveur correspondant n'est pas rejoué en double. */
+let lastLocalFireAt = -Infinity;
+const LOCAL_FIRE_MATCH_MS = 1500;
 /** @type {ReturnType<typeof setTimeout>|null} */
 let connectTimer = null;
 const cmd = createInput();
@@ -341,9 +344,11 @@ function handleEvent(e) {
       break;
     }
     case EVENT.ATTACK: {
-      if (e.a === local || e.a >= MAX_PLAYERS) break; // le local a déjà son effet (prédiction)
+      if (e.a >= MAX_PLAYERS) break;
       const brawlerId = e.c >> 1;
       if (brawlerId >= BRAWLER_COUNT) break;
+      // Le local a déjà joué son effet à la prédiction ; sinon (tir que la prédiction a manqué) on le joue ici.
+      if (e.a === local && now - lastLocalFireAt < LOCAL_FIRE_MATCH_MS) break;
       const b = BRAWLERS[brawlerId];
       renderer.attackAnimRef(e.a);
       attackFx((e.c & 1) === 1 ? b.super : b.main, brawlerId, e.x, e.y, e.angle, e.value, false);
@@ -403,6 +408,7 @@ net.onEvent = handleEvent;
  * @param {number} flags
  */
 function onLocalActions(flags) {
+  lastLocalFireAt = performance.now();
   const p = net.predicted;
   const b = BRAWLERS[p.brawlerId];
   if ((flags & ACTION_FIRED_SUPER) !== 0) {
@@ -497,4 +503,6 @@ function frame(now) {
 menu.show();
 menu.setStatus(isTouch ? 'Conseil : joue en mode paysage.' : '', false);
 requestAnimationFrame(frame);
+/** Accès en lecture pour les tests automatisés (aucun effet sur le jeu). */
+window.gimNet = net;
 window.gimReady = true;

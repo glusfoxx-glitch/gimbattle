@@ -19,6 +19,9 @@ import { createInput } from '../shared/simulation.js';
 import { Room, InputQueue } from '../server/room.js';
 
 const PEER_PREFIX = 'gimbattle-v1-';
+/** Invité : délai avant de retenter une mise en relation restée bloquée, et nombre d'essais. */
+const GUEST_ATTEMPT_TIMEOUT_MS = 6000;
+const GUEST_CONNECT_ATTEMPTS = 3;
 
 /**
  * @typedef {Object} P2PSocket
@@ -81,6 +84,8 @@ class ClientConn {
     this.invalidCount = 0;
     this.lastInvalidLog = -INVALID_LOG_INTERVAL_MS;
     this.leftAt = -Infinity;
+    this.starveTicks = 0;
+    this.inputDebt = 0;
   }
   consumeToken() {
     const now = performance.now();
@@ -103,7 +108,7 @@ class ClientConn {
   send(data) { this.sendFn(data); }
 }
 
-class HostServer {
+export class HostServer {
   /** @param {string} roomId */
   constructor(roomId) {
     this.room = new Room(roomId, (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
@@ -114,6 +119,8 @@ class HostServer {
     this.running = true;
     this.lastLoop = performance.now();
     this.accumulator = 0;
+    /** Horloge de simulation : avance d'exactement TICK_MS par tick (snapshots datés sans doublon, même en rattrapage). */
+    this.simTime = this.lastLoop;
     /** @type {ReturnType<typeof setTimeout>|null} */
     this.timer = null;
     /** @type {Worker|null} */
@@ -168,7 +175,7 @@ class HostServer {
     } else if (type === MSG.PING) {
       const clientTime = decodePing(reader);
       if (Number.isNaN(clientTime)) { client.reject('ping invalide'); return; }
-      encodePong(this.pongWriter, clientTime, performance.now());
+      encodePong(this.pongWriter, clientTime, this.simTime + this.accumulator + (performance.now() - this.lastLoop));
       client.send(takeBytes(this.pongWriter));
     } else {
       client.reject(`type de message inconnu (${type})`);
@@ -200,7 +207,8 @@ class HostServer {
     this.lastLoop = now;
     let ticks = 0;
     while (this.accumulator >= TICK_MS && ticks < MAX_CATCHUP_TICKS) {
-      this.room.tick(now);
+      this.simTime += TICK_MS;
+      this.room.tick(this.simTime);
       this.accumulator -= TICK_MS;
       ticks++;
     }
@@ -292,36 +300,60 @@ export function createGuestSocket(room) {
   let opened = false;
   /** @type {any} */
   let conn = null;
-  const peer = new Peer();
+  /** @type {any} */
+  let peer = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
+  let retryTimer = null;
+  let attempts = 0;
 
   const fail = (/** @type {string} */ message) => {
     if (closed) return;
     closed = true;
-    peer.destroy();
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    if (peer !== null) peer.destroy();
     if (opened) socket.onclose();
     else socket.onfail(message);
   };
 
-  peer.on('open', () => {
-    if (closed) return;
-    conn = peer.connect(PEER_PREFIX + room, { reliable: true, serialization: 'raw' });
-    conn.on('open', () => {
-      if (closed) return;
-      opened = true;
-      socket.onopen();
+  // Une mise en relation WebRTC reste parfois bloquée sans erreur (environ 1 fois sur 6 en test) :
+  // si le canal ne s'ouvre pas vite, on recommence avec une connexion neuve au lieu d'attendre indéfiniment.
+  const attempt = () => {
+    attempts++;
+    const p = new Peer();
+    peer = p;
+    retryTimer = setTimeout(() => {
+      if (closed || opened || peer !== p) return;
+      p.destroy();
+      if (attempts < GUEST_CONNECT_ATTEMPTS) attempt();
+      else fail('La connexion à la partie a échoué. Réessaie dans un instant.');
+    }, GUEST_ATTEMPT_TIMEOUT_MS);
+
+    p.on('open', () => {
+      if (closed || peer !== p) return;
+      const c = p.connect(PEER_PREFIX + room, { reliable: true, serialization: 'raw' });
+      conn = c;
+      c.on('open', () => {
+        if (closed || peer !== p) return;
+        if (retryTimer !== null) clearTimeout(retryTimer);
+        opened = true;
+        socket.onopen();
+      });
+      c.on('data', (/** @type {unknown} */ raw) => {
+        if (peer !== p) return;
+        const data = normalizeIncoming(raw);
+        if (data !== null && !closed) socket.onmessage(data);
+      });
+      c.on('close', () => { if (peer === p && opened) fail("L'hôte a fermé la partie."); });
+      c.on('error', () => { if (peer === p && opened) fail('La connexion à la partie a échoué.'); });
     });
-    conn.on('data', (/** @type {unknown} */ raw) => {
-      const data = normalizeIncoming(raw);
-      if (data !== null && !closed) socket.onmessage(data);
+    p.on('error', (/** @type {any} */ err) => {
+      if (peer !== p) return;
+      // Une fois en jeu, seule la fermeture du canal compte (le service de mise en relation peut tomber sans gêner).
+      if (opened && err?.type !== 'peer-unavailable') return;
+      fail(describePeerError(err));
     });
-    conn.on('close', () => fail("L'hôte a fermé la partie."));
-    conn.on('error', () => fail('La connexion à la partie a échoué.'));
-  });
-  peer.on('error', (err) => {
-    // Une fois en jeu, seule la fermeture du canal compte (le service de mise en relation peut tomber sans gêner).
-    if (opened && err?.type !== 'peer-unavailable') return;
-    fail(describePeerError(err));
-  });
+  };
+  attempt();
 
   socket.send = (data) => {
     if (!closed && conn !== null && conn.open) conn.send(detach(data));
@@ -329,7 +361,8 @@ export function createGuestSocket(room) {
   socket.close = () => {
     if (closed) return;
     closed = true;
-    peer.destroy();
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    if (peer !== null) peer.destroy();
   };
   return socket;
 }

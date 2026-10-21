@@ -8,7 +8,7 @@
  */
 import {
   TICK_MS, SNAPSHOT_BUFFER_SIZE, SNAPSHOT_BUFFER_BYTES, PENDING_INPUT_CAPACITY, INPUT_MESSAGE_BYTES,
-  PING_MESSAGE_BYTES, PING_INTERVAL_MS, INTERP_DELAY_MS, CLOCK_SMOOTHING, CLOCK_SNAP_THRESHOLD_MS,
+  PING_MESSAGE_BYTES, PING_INTERVAL_MS, INTERP_DELAY_MS, MAX_INTERP_DELAY_MS, EVENT, CLOCK_SMOOTHING, CLOCK_SNAP_THRESHOLD_MS,
   CORRECTION_SMOOTHING, CORRECTION_SNAP_DIST, MAX_PLAYERS, MAX_BOTS, MAX_PROJECTILES, MAX_ZONES, MSG, REF_NONE,
   NET_ID_MASK, PROGRESS_QUANT, TEAM_A, TEAM_B, PF_DEAD, PF_STUNNED, PF_SLOWED, PF_SPEED, PF_INVISIBLE, PF_BLIND,
   PF_SHIELD, PF_DASH, PF_AIRBORNE, PF_TEAM_B, AUTO_AIM_RANGE_FACTOR, MAX_AIM_DISTANCE, BOT_REF_BASE, HALF, FLOAT_ZERO,
@@ -123,6 +123,15 @@ export class Net {
     this.clockReady = false;
     this.rtt = FLOAT_ZERO;
     this.lastPingAt = -Infinity;
+    /** Délai d'interpolation adaptatif : grandit si les snapshots arrivent en retard ou par à-coups. */
+    this.interpDelay = INTERP_DELAY_MS;
+    this.arrivalMean = FLOAT_ZERO;
+    this.arrivalJitter = FLOAT_ZERO;
+    /** Premier point connu de chaque lancer en cloche (pour finir son vol jusqu'au point d'impact). */
+    this.lobStartX = new Float32Array(NET_ID_MASK + 1);
+    this.lobStartY = new Float32Array(NET_ID_MASK + 1);
+    this.lobStartT = new Float32Array(NET_ID_MASK + 1).fill(-1);
+    this.lobStartAt = new Float64Array(NET_ID_MASK + 1);
 
     /** @type {Views} */
     this.views = {
@@ -189,6 +198,8 @@ export class Net {
    */
   join(name, brawler, room, mode) {
     this.pendingJoin = makeJoin(name, brawler, room);
+    // Plus aucun input de l'ancienne partie après la demande : le salon repart d'une file neuve.
+    this.joined = false;
     if (this.connected && this.ws !== null && this.mode === mode && this.room === room) this.ws.send(this.pendingJoin);
     else this.connect(mode, room);
   }
@@ -210,6 +221,18 @@ export class Net {
     this.hasSelf = false;
     this.localSlot = -1;
     this.pendingCount = 0;
+    this.pendingHead = 0;
+    // Nouvelle session (souvent un nouvel hôte) : numérotation des inputs et horloge repartent de zéro.
+    // Sinon le salon neuf rejetait tous les inputs (« saut de séquence ») : perso figé côté serveur, téléportations.
+    this.seq = 0;
+    this.clockInit = false;
+    this.clockReady = false;
+    this.lastPingAt = -Infinity;
+    this.interpDelay = INTERP_DELAY_MS;
+    this.arrivalMean = 0;
+    this.arrivalJitter = 0;
+    this.corrX = 0;
+    this.corrY = 0;
     this.snapCount = 0;
     this.latest = null;
     this.views.localSlot = -1;
@@ -273,9 +296,20 @@ export class Net {
     this.snapWrite = (this.snapWrite + 1) % SNAPSHOT_BUFFER_SIZE;
     if (this.snapCount < SNAPSHOT_BUFFER_SIZE) this.snapCount++;
     this.latest = slot;
+    const now = performance.now();
     if (!this.clockInit) {
       this.clockInit = true;
-      this.clockOffset = slot.serverTime - performance.now();
+      this.clockOffset = slot.serverTime - now;
+    } else if (this.clockReady) {
+      // Retard d'arrivée du snapshot par rapport à l'horloge estimée : sa moyenne et sa gigue règlent le délai d'interpolation.
+      const late = now + this.clockOffset - slot.serverTime;
+      this.arrivalMean += (late - this.arrivalMean) * 0.05;
+      this.arrivalJitter += (Math.abs(late - this.arrivalMean) - this.arrivalJitter) * 0.05;
+    }
+    // Annonce d'attaque d'un prof : affichée dès réception (pas 100 ms plus tard) pour laisser le temps d'esquiver.
+    for (let i = 0; i < slot.eventCount; i++) {
+      const e = slot.events[i];
+      if (e.type === EVENT.BOT_WINDUP) { this.onEvent(e); e.type = 0; }
     }
     if (this.joined && slot.selfSlot === this.localSlot) this.reconcile(slot);
   }
@@ -428,7 +462,9 @@ export class Net {
     views.scoreA = latest.scoreA;
     views.scoreB = latest.scoreB;
     views.serverTick = latest.tick;
-    const renderTime = now + this.clockOffset - INTERP_DELAY_MS;
+    const wanted = Math.min(MAX_INTERP_DELAY_MS, Math.max(INTERP_DELAY_MS, INTERP_DELAY_MS + Math.max(0, this.arrivalMean) + this.arrivalJitter * 2));
+    this.interpDelay += (wanted - this.interpDelay) * Math.min(1, dt * 2);
+    const renderTime = now + this.clockOffset - this.interpDelay;
     this.interpolate(renderTime);
     this.overrideLocal(alpha, latest);
   }
@@ -527,8 +563,11 @@ export class Net {
     const lookup = this.idToIndex;
     for (let i = 0; i < a.projectileCount; i++) lookup[a.projectiles[i].id] = i;
     const views = this.views.projectiles;
+    const startT = this.lobStartT;
     for (let i = 0; i < b.projectileCount; i++) {
       const bp = b.projectiles[i];
+      // Identifiants recyclés : un départ vieux de plus de 3 s appartient à un ancien lancer.
+      if (bp.lob > 0 && (startT[bp.id] < 0 || b.serverTime - this.lobStartAt[bp.id] > 3000)) { startT[bp.id] = bp.lob; this.lobStartAt[bp.id] = b.serverTime; this.lobStartX[bp.id] = bp.x; this.lobStartY[bp.id] = bp.y; }
       const v = views[i];
       const index = lookup[bp.id];
       if (index >= 0) {
@@ -548,9 +587,18 @@ export class Net {
     for (let i = 0; i < b.projectileCount; i++) lookup[b.projectiles[i].id] = -2;
     for (let i = 0; i < a.projectileCount && count < views.length; i++) {
       const ap = a.projectiles[i];
-      if (lookup[ap.id] === -2) continue;
+      // Seuls les lancers en cloche finissent leur vol ; un tir droit disparu a touché quelque chose.
+      if (lookup[ap.id] === -2 || ap.lob <= 0) continue;
       const v = views[count++];
       v.x = ap.x; v.y = ap.y; v.lob = ap.lob > 0 ? lerp(ap.lob, 1, t) : 0;
+      // Fin du vol : on prolonge la trajectoire jusqu'au point d'impact (sinon la bouteille s'arrête avant le cercle).
+      const t0 = startT[ap.id];
+      if (ap.lob > 0 && t0 >= 0 && ap.lob - t0 > 0.05) {
+        const k = (1 - t0) / (ap.lob - t0);
+        const endX = this.lobStartX[ap.id] + (ap.x - this.lobStartX[ap.id]) * k;
+        const endY = this.lobStartY[ap.id] + (ap.y - this.lobStartY[ap.id]) * k;
+        v.x = lerp(ap.x, endX, t); v.y = lerp(ap.y, endY, t);
+      }
       v.id = ap.id; v.visual = ap.visual; v.angle = ap.angle;
     }
     this.views.projectileCount = count;

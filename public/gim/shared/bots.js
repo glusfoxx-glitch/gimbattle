@@ -161,6 +161,9 @@ function startWindup(world, bot, type, angle) {
   bot.angle = angle;
   const cx = bot.x + Math.cos(angle) * type.strikeOffset;
   const cy = bot.y + Math.sin(angle) * type.strikeOffset;
+  // Le coup tombe exactement là où il a été annoncé (même si le prof est repoussé pendant la préparation).
+  bot.strikeX = cx;
+  bot.strikeY = cy;
   emitEvent(world, EVENT.BOT_WINDUP, bot.ref, REF_NONE, type.id, cx, cy, Math.round(type.strikeRadius * ZONE_RADIUS_SCALE), angle);
 }
 
@@ -176,8 +179,8 @@ function finishWindup(world, bot, type) {
     bot.hitPlayers = 0;
     return;
   }
-  const cx = bot.x + Math.cos(bot.angle) * type.strikeOffset;
-  const cy = bot.y + Math.sin(bot.angle) * type.strikeOffset;
+  const cx = bot.strikeX;
+  const cy = bot.strikeY;
   hitArea(world, bot.ref, TEAM_BOTS, cx, cy, type.strikeRadius, type, type.damage, bot.angle);
   emitEvent(world, EVENT.BOT_STRIKE, bot.ref, REF_NONE, type.id, cx, cy, Math.round(type.strikeRadius * ZONE_RADIUS_SCALE), bot.angle);
   enterRecover(bot, type);

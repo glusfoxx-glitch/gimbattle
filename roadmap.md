@@ -1,7 +1,11 @@
 # Roadmap
 - [x] Port GIM Battle to web with WebRTC room codes
 - [x] Verify all features and fix bugs
-- [ ] Fix molotov landing / ability bugs
-- [ ] Fix bot (prof) bugs
-- [ ] Fix character moving on its own
-- [ ] Test every character ability in game
+- [x] Fix molotov landing / ability bugs
+- [x] Fix bot (prof) bugs (strike lands where announced)
+- [x] Fix character moving on its own / teleporting (input timing, sequence reset on rejoin)
+- [x] Test every character ability (automated bench)
+- [x] Two-browser end-to-end test incl. leave/rejoin
+- [x] Make "Créer / Rejoindre" choice clearly visible on mobile and desktop
+- [x] Guest connection auto-retry (1 in 6 attempts used to hang)
+- [x] Final French report to the user

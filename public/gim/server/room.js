@@ -4,13 +4,14 @@
  */
 import {
   MAX_PLAYERS, MAX_INPUT_QUEUE, INPUT_CATCHUP_THRESHOLD, TICK_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_BUFFER_BYTES,
-  TEAM_A, TEAM_B, MAX_SEQ_JUMP,
+  TEAM_A, TEAM_B, MAX_SEQ_JUMP, INPUT_STARVE_GRACE_TICKS,
 } from '../shared/constants.js';
 import { ARENA } from '../shared/arena.js';
 import { createWorld, countTeam } from '../shared/world.js';
 import { createRng } from '../shared/rng.js';
 import {
   createInput, copyInput, stepPlayerSelf, applyPlayerActions, stepWorld, resolveAutoAim, activatePlayer, deactivatePlayer,
+  dashContacts,
 } from '../shared/simulation.js';
 import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster } from '../shared/protocol.js';
 
@@ -98,6 +99,8 @@ export class Room {
     client.name = name;
     client.brawlerId = brawlerId;
     client.ackSeq = 0;
+    client.starveTicks = 0;
+    client.inputDebt = 0;
     client.queue.reset();
     client.eventFrom = this.world.eventHead;
     activatePlayer(this.world, slot, team, brawlerId, this.rng);
@@ -118,13 +121,25 @@ export class Room {
   }
 
   /**
-   * Consomme les inputs d'un client. File vide = pas à vide (le temps avance, le joueur ne bouge pas) ;
-   * file trop longue = on rattrape à 2 inputs par tick pour résorber la latence accumulée.
+   * Consomme les inputs d'un client.
+   * Le temps du joueur avance AVEC ses inputs (exactement comme sa prédiction locale) :
+   * - file vide pendant un court instant (gigue réseau) : on attend l'input en retard au lieu d'inventer un pas
+   *   « immobile » que le client n'a pas prédit (c'était la cause des téléportations / persos qui reculent) ;
+   *   la dette est rattrapée dès que les inputs arrivent (2 par tick) ;
+   * - file vide trop longtemps (onglet en arrière-plan, déconnexion) : pas à vide, le temps continue ;
+   * - file trop longue : on rattrape à 2 inputs par tick pour résorber la latence accumulée.
    * @param {RoomClient} client
    */
   processInputs(client) {
     const p = this.world.players[client.slot];
-    if (client.queue.count === 0) {
+    const queue = client.queue;
+    if (queue.count === 0) {
+      client.starveTicks = (client.starveTicks ?? 0) + 1;
+      if (client.starveTicks <= INPUT_STARVE_GRACE_TICKS) {
+        client.inputDebt = Math.min(INPUT_STARVE_GRACE_TICKS, (client.inputDebt ?? 0) + 1);
+        return;
+      }
+      client.inputDebt = 0;
       const neutral = this.neutralInput;
       neutral.moveX = 0;
       neutral.moveY = 0;
@@ -134,13 +149,19 @@ export class Room {
       applyPlayerActions(this.world, p, stepPlayerSelf(p, neutral, TICK_MS, this.world.arena), neutral);
       return;
     }
-    const steps = client.queue.count > INPUT_CATCHUP_THRESHOLD ? 2 : 1;
-    for (let s = 0; s < steps && client.queue.count > 0; s++) {
-      const input = client.queue.shift();
+    client.starveTicks = 0;
+    let steps = 1;
+    if (queue.count > INPUT_CATCHUP_THRESHOLD) steps = 2;
+    else if ((client.inputDebt ?? 0) > 0 && queue.count > 1) steps = 2;
+    if (steps === 2 && (client.inputDebt ?? 0) > 0) client.inputDebt--;
+    for (let s = 0; s < steps && queue.count > 0; s++) {
+      const input = queue.shift();
       resolveAutoAim(this.world, p, input);
       const flags = stepPlayerSelf(p, input, TICK_MS, this.world.arena);
       applyPlayerActions(this.world, p, flags, input);
       client.ackSeq = input.seq;
+      // Pas supplémentaire : on vérifie les contacts du dash à mi-chemin (sinon une cible frôlée est ratée).
+      if (s < steps - 1 && p.dashing && !p.dead) dashContacts(this.world, p);
     }
   }
 

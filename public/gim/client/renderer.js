@@ -90,6 +90,8 @@ export class Renderer {
     this.playerCache = new Map();
     /** @type {(CharacterModel|null)[]} */
     this.playerShown = new Array(MAX_PLAYERS).fill(null);
+    /** Animations d'attaque reçues avant l'apparition du modèle (instant de réception, 0 = aucune). */
+    this.pendingAttack = new Float64Array(MAX_PLAYERS);
     /** @type {Map<number, CharacterModel>} */
     this.botCache = new Map();
     /** @type {(CharacterModel|null)[]} */
@@ -417,6 +419,8 @@ export class Renderer {
   attackAnimRef(ref) {
     const model = this.modelForRef(ref);
     if (model !== null) triggerAttack(model);
+    // Modèle pas encore affiché à cette frame : l'animation est jouée dès son apparition.
+    else if (ref < MAX_PLAYERS) this.pendingAttack[ref] = performance.now();
   }
 
   /** @param {number} amount */
@@ -494,6 +498,10 @@ export class Renderer {
         model.root.visible = true;
         model.lastX = NaN;
         this.playerShown[slot] = model;
+      }
+      if (this.pendingAttack[slot] > 0) {
+        if (performance.now() - this.pendingAttack[slot] < 300) triggerAttack(model);
+        this.pendingAttack[slot] = 0;
       }
       setRingColor(model, slot === views.localSlot ? LOCAL_RING_COLOR : TEAM_COLORS[v.team]);
       setInvisibleLook(model, (v.flags & PF_INVISIBLE) !== 0);

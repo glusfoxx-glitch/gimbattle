@@ -14,7 +14,7 @@ export const SNAPSHOT_INTERVAL_MS = 1000 / SNAPSHOT_RATE;
 /** Tolérance sur les minuteries : évite qu'un arrondi flottant décale une recharge d'un tick entre client et serveur. */
 export const TIMER_EPSILON_MS = 0.5;
 /** Nombre max de ticks rattrapés d'un coup par le serveur après un gel du processus. */
-export const MAX_CATCHUP_TICKS = 5;
+export const MAX_CATCHUP_TICKS = 10;
 /** Plafond du delta de frame côté client : évite l'emballement au retour d'un onglet inactif. */
 export const MAX_FRAME_DELTA_MS = 250;
 export const MS_PER_SECOND = 1000;
@@ -188,6 +188,8 @@ export const RATE_LIMIT_PER_SEC = 45;
 export const MAX_SEQ_JUMP = 900;
 /** Au-delà de ce retard d'inputs en file, le serveur en traite 2 par tick pour rattraper. */
 export const INPUT_CATCHUP_THRESHOLD = 4;
+/** File d'inputs vide : le serveur attend l'input en retard pendant ce nombre de ticks avant d'avancer « à vide ». */
+export const INPUT_STARVE_GRACE_TICKS = 6;
 export const INVALID_LOG_INTERVAL_MS = 5000;
 /** Après un retour au menu, les inputs encore en vol pendant ce délai sont ignorés sans être journalisés. */
 export const LEAVE_GRACE_MS = 2000;
@@ -216,6 +218,8 @@ export const THREE_CDN_BASE = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSIO
 
 export const PING_INTERVAL_MS = 1000;
 export const INTERP_DELAY_MS = 100;
+/** Délai d'interpolation adaptatif (réseau qui saccade) : jamais au-delà. */
+export const MAX_INTERP_DELAY_MS = 250;
 export const CLOCK_SMOOTHING = 0.1;
 export const CLOCK_SNAP_THRESHOLD_MS = 250;
 export const MAX_EXTRAPOLATION_MS = 100;
@@ -294,7 +298,7 @@ export const AIM_LINE_WIDTH = 0.5;
 /** Le canvas WebGL sert de « tableau noir » derrière le menu. */
 export const MENU_BG_COLOR = 0x1e3b2f;
 export const PREVIEW_BG_COLOR = 0x24493a;
-export const CONNECT_TIMEOUT_MS = 15000;
+export const CONNECT_TIMEOUT_MS = 20000;
 export const PREVIEW_SPIN_SPEED = 0.6;
 export const PREVIEW_ATTACK_EVERY_S = 2.5;
 export const TEAM_CSS = Object.freeze(['#3d8bff', '#ff4d5e', '#ffa62b']);

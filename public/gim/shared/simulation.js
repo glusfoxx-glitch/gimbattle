@@ -464,7 +464,7 @@ export function deactivatePlayer(world, slot) {
  * Contacts du dash (trottinette) : chaque cible n'est fauchée qu'une fois par dash.
  * @param {World} world @param {Player} p
  */
-function dashContacts(world, p) {
+export function dashContacts(world, p) {
   const def = getAttack(p.brawlerId, p.dashIsSuper);
   const count = queryTargets(world, p.team, p.x, p.y, p.radius + CONTACT_MARGIN, QUERY_ENEMIES, p.ref);
   for (let i = 0; i < count; i++) {
