@@ -15,7 +15,7 @@ import {
   BOT_BEHAVIOR, ATTACK_KIND, AIM_COLOR, AIM_SUPER_COLOR, AIM_OPACITY, AIM_LINE_WIDTH, MAX_AIM_DISTANCE,
   PREVIEW_SPIN_SPEED, PREVIEW_ATTACK_EVERY_S, MENU_BG_COLOR, PREVIEW_BG_COLOR, BOT_REF_BASE, HALF, TWO_PI, FLOAT_ZERO,
 } from '../shared/constants.js';
-import { ARENA } from '../shared/arena.js';
+import { ARENA, MAPS, inHideout } from '../shared/arena.js';
 import { BRAWLERS, BRAWLER_COUNT } from '../shared/brawlers.js';
 import { PROFS, PROF_COUNT } from '../shared/profs.js';
 import {
@@ -37,7 +37,13 @@ const DECOR = Object.freeze({
   TABLE_TOP: 0.08, TABLE_LEG: 0.07, TABLE_INSET: 0.15, LOCKER_DOOR: 0.6, PILLAR_BASE: 0.25,
   BOARD_WIDTH: 9, BOARD_HEIGHT: 1.1, BOARD_Y: 1.0, HEMI: 1.5, SUN: 2.0, SUN_X: -10, SUN_Y: 24, SUN_Z: 12,
   SPAWN_TINT: 4, CENTER_CIRCLE: 3, DOOR_HALF: 1.2, DOOR_DEPTH: 0.6,
+  SHELF: 0x6b4423, SHELF_BOARD: 0x8a5a30, RUG: 0x3a2f4f, RACK: 0x3b3b3b,
 });
+/** Couleurs des livres et des manteaux (CDI). */
+const BOOK_COLORS = Object.freeze([0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x8e44ad, 0xe67e22, 0xecf0f1]);
+const COAT_COLORS = Object.freeze([0x2c3e50, 0x7f8c8d, 0x8e2b2b, 0x1f5f3f, 0x34495e, 0xa0522d, 0x5d3a7a, 0x2e4053]);
+const COAT_SPACING = 0.55;
+const COAT_HEIGHT = 1.45;
 
 const ZONE_STYLE = Object.freeze([
   null,
@@ -83,6 +89,10 @@ export class Renderer {
     this.shake = FLOAT_ZERO;
     this.shakeTime = FLOAT_ZERO;
     this.addLights(this.scene);
+    /** Décor de la carte en cours : reconstruit quand l'hôte passe à l'autre carte. */
+    this.arena = ARENA;
+    this.arenaGroup = new THREE.Group();
+    this.scene.add(this.arenaGroup);
     this.buildArena();
     this.effects = new Effects(this.scene);
 
@@ -137,9 +147,11 @@ export class Renderer {
     canvas.width = ARENA_WIDTH * px;
     canvas.height = ARENA_HEIGHT * px;
     const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+    const cdi = this.arena.hideouts.length > 0;
     for (let y = 0; y < ARENA_HEIGHT; y++) {
       for (let x = 0; x < ARENA_WIDTH; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? FLOOR_COLOR_A : FLOOR_COLOR_B;
+        // CDI : moquette bleue au lieu du carrelage de la salle de classe.
+        ctx.fillStyle = cdi ? ((x + y) % 2 === 0 ? '#5d7fa6' : '#56789e') : (x + y) % 2 === 0 ? FLOOR_COLOR_A : FLOOR_COLOR_B;
         ctx.fillRect(x * px, y * px, px, px);
       }
     }
@@ -158,7 +170,17 @@ export class Renderer {
     ctx.beginPath(); ctx.moveTo(canvas.width * HALF, 0); ctx.lineTo(canvas.width * HALF, canvas.height); ctx.stroke();
     ctx.beginPath(); ctx.arc(canvas.width * HALF, canvas.height * HALF, DECOR.CENTER_CIRCLE * px, 0, TWO_PI); ctx.stroke();
     // Portes des profs : bandes jaune/noir
-    for (const door of ARENA.botSpawns) {
+    // Cachettes : tapis sombre sous les portemanteaux, bien repérable.
+    for (const h of this.arena.hideouts) {
+      ctx.fillStyle = 'rgba(40,24,60,0.55)';
+      ctx.fillRect(h.minX * px, h.minY * px, (h.maxX - h.minX) * px, (h.maxY - h.minY) * px);
+      ctx.strokeStyle = 'rgba(245,230,99,0.8)';
+      ctx.setLineDash([px * 0.3, px * 0.2]);
+      ctx.lineWidth = px * 0.08;
+      ctx.strokeRect(h.minX * px, h.minY * px, (h.maxX - h.minX) * px, (h.maxY - h.minY) * px);
+      ctx.setLineDash([]);
+    }
+    for (const door of this.arena.botSpawns) {
       const dx = (door.x - DECOR.DOOR_HALF) * px;
       const dy = door.y < ARENA_HEIGHT * HALF ? 0 : canvas.height - DECOR.DOOR_DEPTH * px;
       for (let i = 0; i < 6; i++) {
@@ -194,11 +216,11 @@ export class Renderer {
   buildArena() {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_WIDTH, ARENA_HEIGHT), new THREE.MeshLambertMaterial({ map: this.createFloorTexture() }));
     floor.rotation.x = -Math.PI * HALF;
-    this.scene.add(floor);
+    this.arenaGroup.add(floor);
     const outside = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_WIDTH * 4, ARENA_HEIGHT * 4), new THREE.MeshBasicMaterial({ color: DECOR.OUTSIDE }));
     outside.rotation.x = -Math.PI * HALF;
     outside.position.y = -0.02;
-    this.scene.add(outside);
+    this.arenaGroup.add(outside);
 
     const G = SHARED_GEOMETRY;
     /** @type {import('./models.js').ColoredPart[]} */
@@ -216,13 +238,57 @@ export class Renderer {
     push(G.box, WALL_TOP_COLOR, T, 0.1, ARENA_HEIGHT, -HALF_W - T * HALF, WALL_HEIGHT, 0);
     push(G.box, WALL_TOP_COLOR, T, 0.1, ARENA_HEIGHT, HALF_W + T * HALF, WALL_HEIGHT, 0);
     push(G.box, DECOR.BOARD_FRAME, DECOR.BOARD_WIDTH + 0.2, DECOR.BOARD_HEIGHT + 0.2, 0.05, 0, DECOR.BOARD_Y, -HALF_H + 0.02);
-    for (const o of ARENA.obstacles) this.addObstacleParts(o, push);
+    for (const o of this.arena.obstacles) this.addObstacleParts(o, push);
+    this.arena.hideouts.forEach((h, i) => this.addHideoutParts(h, i, push));
     const decor = new THREE.Mesh(mergeColored(parts), new THREE.MeshLambertMaterial({ vertexColors: true }));
-    this.scene.add(decor);
+    this.arenaGroup.add(decor);
 
     const board = new THREE.Mesh(new THREE.PlaneGeometry(DECOR.BOARD_WIDTH, DECOR.BOARD_HEIGHT), new THREE.MeshBasicMaterial({ map: this.createBoardTexture() }));
     board.position.set(0, DECOR.BOARD_Y, -HALF_H + 0.05);
-    this.scene.add(board);
+    this.arenaGroup.add(board);
+  }
+
+  /** @param {import('../shared/arena.js').Arena} arena Change le décor (entre deux manches). */
+  setArena(arena) {
+    if (arena === undefined || arena === this.arena) return;
+    this.arena = arena;
+    for (const child of this.arenaGroup.children.slice()) {
+      this.arenaGroup.remove(child);
+      const mesh = /** @type {THREE.Mesh} */ (child);
+      mesh.geometry?.dispose();
+      const mat = /** @type {any} */ (mesh.material);
+      mat?.map?.dispose();
+      mat?.dispose();
+    }
+    this.buildArena();
+  }
+
+  /**
+   * Portemanteaux : rangées de manteaux colorés dans lesquelles on se cache.
+   * @param {import('../shared/arena.js').Hideout} h @param {number} index
+   * @param {(geo: THREE.BufferGeometry, color: number, sx: number, sy: number, sz: number, x: number, y: number, z: number) => void} push
+   */
+  addHideoutParts(h, index, push) {
+    const G = SHARED_GEOMETRY;
+    const w = h.maxX - h.minX;
+    const d = h.maxY - h.minY;
+    const cols = Math.max(1, Math.floor(w / COAT_SPACING));
+    const rows = Math.max(1, Math.floor(d / COAT_SPACING));
+    let n = index * 7;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        n++;
+        const x = h.minX + (c + 0.5) * (w / cols) - HALF_W + ((n * 37) % 7 - 3) * 0.02;
+        const z = h.minY + (r + 0.5) * (d / rows) - HALF_H + ((n * 53) % 7 - 3) * 0.02;
+        const height = COAT_HEIGHT - ((n * 29) % 5) * 0.06;
+        push(G.box, COAT_COLORS[n % COAT_COLORS.length], 0.46, height, 0.4, x, height * HALF, z);
+      }
+    }
+    // Barres des portemanteaux
+    for (let r = 0; r < rows; r++) {
+      const z = h.minY + (r + 0.5) * (d / rows) - HALF_H;
+      push(G.box, DECOR.RACK, w, 0.05, 0.05, h.minX + w * HALF - HALF_W, COAT_HEIGHT + 0.08, z);
+    }
   }
 
   /**
@@ -247,6 +313,23 @@ export class Renderer {
       const iz = o.halfH - DECOR.TABLE_INSET;
       for (let sx = -1; sx <= 1; sx += 2) {
         for (let sz = -1; sz <= 1; sz += 2) push(G.box, DECOR.LEG, DECOR.TABLE_LEG, legH, DECOR.TABLE_LEG, x + sx * ix, legH * HALF, z + sz * iz);
+      }
+    } else if (o.look === OBSTACLE_LOOK.SHELF) {
+      const height = o.height;
+      push(G.box, DECOR.SHELF, w, height, d, x, height * HALF, z);
+      // Rangées de livres colorés sur les deux grandes faces
+      const long = Math.max(w, d);
+      const books = Math.max(2, Math.floor(long / 0.22));
+      for (let level = 0; level < 4; level++) {
+        const y = 0.25 + level * (height - 0.3) / 4;
+        push(G.box, DECOR.SHELF_BOARD, w + 0.04, 0.04, d + 0.04, x, y - 0.03, z);
+        for (let i = 0; i < books; i++) {
+          const t = -long * HALF + (long * (i + 0.5)) / books;
+          const bh = 0.24 + ((i * 7 + level * 3) % 4) * 0.03;
+          const color = BOOK_COLORS[(i * 3 + level * 5) % BOOK_COLORS.length];
+          if (d >= w) push(G.box, color, w + 0.06, bh, long / books * 0.8, x, y + bh * HALF, z + t);
+          else push(G.box, color, long / books * 0.8, bh, d + 0.06, x + t, y + bh * HALF, z);
+        }
       }
     } else if (o.look === OBSTACLE_LOOK.DESK) {
       push(G.box, DECOR.WOOD_DARK, w, DESK_HEIGHT, d, x, DESK_HEIGHT * HALF, z);
@@ -436,6 +519,7 @@ export class Renderer {
    * @param {Views} views @param {number} dt @param {number} time @param {AimState} aim
    */
   renderGame(views, dt, time, aim) {
+    this.setArena(MAPS[views.mapId]);
     this.updateCamera(views, dt, aim);
     this.updatePlayers(views, dt, time);
     this.updateBots(views, dt, time);
@@ -504,7 +588,8 @@ export class Renderer {
         this.pendingAttack[slot] = 0;
       }
       setRingColor(model, slot === views.localSlot ? LOCAL_RING_COLOR : TEAM_COLORS[v.team]);
-      setInvisibleLook(model, (v.flags & PF_INVISIBLE) !== 0);
+      // Caché dans les manteaux : les alliés (et soi-même) le voient en transparence.
+      setInvisibleLook(model, (v.flags & PF_INVISIBLE) !== 0 || (this.arena.hideouts.length > 0 && inHideout(this.arena, v.x, v.y)));
       this.pose(model, v.x, v.y, v.aim, v.air, (v.flags & PF_STUNNED) !== 0, (v.flags & PF_DASH) !== 0,
         (v.flags & PF_SHIELD) !== 0, 0, dt, time);
     }

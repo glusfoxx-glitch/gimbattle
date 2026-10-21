@@ -12,7 +12,6 @@ import {
   CONNECT_TIMEOUT_MS, PF_DEAD, HALF, FLOAT_ZERO,
 } from '../shared/constants.js';
 import { ResultsScreen } from './results.js';
-import { ARENA } from '../shared/arena.js';
 import { BRAWLERS, BRAWLER_COUNT } from '../shared/brawlers.js';
 import { PROFS } from '../shared/profs.js';
 import { raycast } from '../shared/physics.js';
@@ -238,7 +237,7 @@ function attackFx(def, brawlerId, x, y, angle, value, isLocal) {
       sound(SOUND.SWOOSH, x, y, isLocal);
       break;
     case ATTACK_KIND.BEAM: {
-      const length = isLocal ? raycast(x, y, cos, sin, def.range, ARENA) : value / BEAM_LENGTH_SCALE;
+      const length = isLocal ? raycast(x, y, cos, sin, def.range, net.arena) : value / BEAM_LENGTH_SCALE;
       effects.beam(x, y, angle, length, 0xffb347);
       effects.burst(x + cos * length, y + sin * length, BEAM_HEIGHT, 8, 0xfff2b0, 3, 0.3, 300, HALF);
       sound(SOUND.SNAP, x, y, isLocal);
