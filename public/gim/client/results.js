@@ -55,6 +55,7 @@ export class ResultsScreen {
     document.body.append(this.root);
     this.timer = 0;
     this.endsAt = 0;
+    this.onHide = () => {};
   }
 
   get visible() { return !this.root.hidden; }
@@ -108,6 +109,8 @@ export class ResultsScreen {
 
   hide() {
     clearInterval(this.timer);
+    if (this.root.hidden) return;
     this.root.hidden = true;
+    this.onHide();
   }
 }

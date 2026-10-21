@@ -11,6 +11,7 @@ import {
   SHAKE_FIRE, SHAKE_HIT_TAKEN, SHAKE_KO, SHAKE_IMPACT, HEAL_CSS, DAMAGE_CSS, SUPER_MAX, PROJECTILE_HEIGHT,
   CONNECT_TIMEOUT_MS, PF_DEAD, HALF, FLOAT_ZERO,
 } from '../shared/constants.js';
+import { ResultsScreen } from './results.js';
 import { ARENA } from '../shared/arena.js';
 import { BRAWLERS, BRAWLER_COUNT } from '../shared/brawlers.js';
 import { PROFS } from '../shared/profs.js';
@@ -122,6 +123,7 @@ function startGame(name, brawler, room, mode) {
 /** @param {string} message @param {boolean} isError */
 function backToMenu(message, isError) {
   state = STATE_MENU;
+  results.hide();
   input.setEnabled(false);
   hud.wipe();
   menuButton.hidden = true;
@@ -142,6 +144,17 @@ net.onWelcome = (slot, team) => {
   menuButton.hidden = false;
   document.body.classList.add('playing');
   hud.showBanner(team === TEAM_A ? 'Équipe BLEUE' : 'Équipe ROUGE', "Mets K.O. l'équipe adverse… et les profs !", TEAM_CSS[team], performance.now());
+};
+
+const results = new ResultsScreen((id) => {
+  net.pick(id);
+  menu.selectBrawler(id);
+});
+results.onHide = () => { if (state === STATE_PLAYING) input.setEnabled(true); };
+net.onResults = (res) => {
+  if (state !== STATE_PLAYING) return;
+  input.setEnabled(false);
+  results.show(res, net.localSlot);
 };
 
 net.onError = (message) => {
@@ -389,11 +402,12 @@ function handleEvent(e) {
       break;
     case EVENT.ROUND_END: {
       const winner = e.c <= ROUND_DRAW ? e.c : ROUND_DRAW;
-      hud.showBanner(WINNER_TEXT[winner], 'Nouvelle manche dans quelques secondes', winner === ROUND_DRAW ? '#ffffff' : TEAM_CSS[winner], now, MS_PER_SECOND * 5);
+      hud.showBanner(WINNER_TEXT[winner], 'Tableau des scores', winner === ROUND_DRAW ? '#ffffff' : TEAM_CSS[winner], now, MS_PER_SECOND * 5);
       audio.play(SOUND.FANFARE);
       break;
     }
     case EVENT.ROUND_START:
+      results.hide();
       hud.showBanner('Nouvelle manche !', 'Les scores repartent à zéro', '#ffffff', now);
       audio.play(SOUND.READY);
       break;
