@@ -5,15 +5,16 @@
 import {
   MAX_PLAYERS, MAX_INPUT_QUEUE, INPUT_CATCHUP_THRESHOLD, TICK_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_BUFFER_BYTES,
   TEAM_A, TEAM_B, MAX_SEQ_JUMP, INPUT_STARVE_GRACE_TICKS, ROUND_PHASE_ENDED, ROUND_DRAW,
+  MAP_COUNT, MAP_MODE_BOTH, MS_PER_SECOND, ROUND_END_PAUSE_MS,
 } from '../shared/constants.js';
-import { ARENA } from '../shared/arena.js';
-import { createWorld, countTeam } from '../shared/world.js';
-import { createRng } from '../shared/rng.js';
+import { ARENA, MAPS } from '../shared/arena.js';
+import { createWorld, countTeam, setWorldArena } from '../shared/world.js';
+import { createRng, nextInt } from '../shared/rng.js';
 import {
   createInput, copyInput, stepPlayerSelf, applyPlayerActions, stepWorld, resolveAutoAim, activatePlayer, deactivatePlayer,
   dashContacts,
 } from '../shared/simulation.js';
-import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster, makeResults } from '../shared/protocol.js';
+import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster, makeResults, makeTeam } from '../shared/protocol.js';
 
 /** @typedef {import('../shared/simulation.js').PlayerInput} PlayerInput */
 
@@ -81,6 +82,53 @@ export class Room {
     this.neutralInput = createInput();
     /** @type {import('../shared/protocol.js').SnapshotContext} */
     this.ctx = { viewer: null, ackSeq: 0, serverTime: 0, eventFrom: 0 };
+    /** Carte(s) : MAP_CLASSE, MAP_CDI ou MAP_MODE_BOTH (tirage à chaque manche). */
+    this.mapMode = 0;
+    this.nextMapId = 0;
+  }
+
+  /**
+   * Réglages choisis par l'hôte dans le salon d'attente (à appeler avant d'ajouter les joueurs).
+   * @param {number} minutes Durée d'une manche. @param {number} mapMode
+   */
+  configure(minutes, mapMode) {
+    const w = this.world;
+    w.roundDurationMs = minutes * 60 * MS_PER_SECOND;
+    w.roundMs = w.roundDurationMs;
+    this.mapMode = mapMode;
+    setWorldArena(w, MAPS[this.pickMap(-1)]);
+    this.nextMapId = w.arena.id;
+  }
+
+  /** @param {number} current Carte jouée (évitée en mode « les deux » pour varier). @returns {number} */
+  pickMap(current) {
+    if (this.mapMode !== MAP_MODE_BOTH) return Math.min(this.mapMode, MAP_COUNT - 1);
+    if (current < 0) return nextInt(this.rng, MAP_COUNT);
+    // Les cartes tournent : jamais deux fois de suite la même.
+    return (current + 1 + nextInt(this.rng, MAP_COUNT - 1)) % MAP_COUNT;
+  }
+
+  /**
+   * Juste avant une nouvelle manche : équipes tirées au sort et carte suivante.
+   */
+  prepareNextRound() {
+    const w = this.world;
+    setWorldArena(w, MAPS[this.nextMapId]);
+    const slots = [];
+    for (let i = 0; i < MAX_PLAYERS; i++) if (this.clients[i] !== null) slots.push(i);
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = nextInt(this.rng, i + 1);
+      const tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp;
+    }
+    const first = nextInt(this.rng, 2) === 0 ? TEAM_A : TEAM_B;
+    slots.forEach((slot, i) => {
+      const team = i % 2 === 0 ? first : 1 - first;
+      const p = w.players[slot];
+      if (p.team === team) return;
+      p.team = team;
+      this.clients[slot]?.send(makeTeam(team));
+    });
+    this.rosterDirty = true;
   }
 
   /**
@@ -172,6 +220,7 @@ export class Room {
       if (client !== null) this.processInputs(client);
     }
     const phaseBefore = this.world.roundPhase;
+    if (phaseBefore === ROUND_PHASE_ENDED && this.world.roundMs - TICK_MS <= 0) this.prepareNextRound();
     stepWorld(this.world, TICK_MS, this.rng);
     if (phaseBefore !== ROUND_PHASE_ENDED && this.world.roundPhase === ROUND_PHASE_ENDED) this.broadcastResults();
     if (this.rosterDirty) this.broadcastRoster();
@@ -222,7 +271,8 @@ export class Room {
       const p = w.players[c.slot];
       players.push({ slot: c.slot, name: c.name, brawler: p.brawlerId, team: p.team, kills: p.kills, deaths: p.deaths });
     }
-    const message = makeResults(a > b ? TEAM_A : b > a ? TEAM_B : ROUND_DRAW, a, b, players);
+    this.nextMapId = this.pickMap(w.arena.id);
+    const message = makeResults(a > b ? TEAM_A : b > a ? TEAM_B : ROUND_DRAW, a, b, players, this.nextMapId, ROUND_END_PAUSE_MS);
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const c = this.clients[i];
       if (c !== null) c.send(message);

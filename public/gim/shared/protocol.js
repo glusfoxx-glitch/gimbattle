@@ -645,10 +645,11 @@ export function makePick(brawler) {
  * Tableau des scores de fin de manche.
  * @param {number} winner @param {number} scoreA @param {number} scoreB
  * @param {{slot:number,name:string,brawler:number,team:number,kills:number,deaths:number}[]} players
+ * @param {number} [nextMap] Carte de la prochaine manche. @param {number} [pauseMs] Durée de l'écran.
  * @returns {string}
  */
-export function makeResults(winner, scoreA, scoreB, players) {
-  return JSON.stringify({ t: 'results', winner, scoreA, scoreB, players });
+export function makeResults(winner, scoreA, scoreB, players, nextMap = 0, pauseMs = 0) {
+  return JSON.stringify({ t: 'results', winner, scoreA, scoreB, players, nextMap, pauseMs });
 }
 
 /** Hôte : lance la partie depuis le salon d'attente. @returns {string} */
