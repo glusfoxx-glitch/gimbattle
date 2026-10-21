@@ -10,7 +10,7 @@
 import Peer from 'https://esm.sh/peerjs@1.5.4?bundle-deps';
 import {
   TICK_MS, MAX_CATCHUP_TICKS, MSG, MAX_BINARY_MESSAGE_BYTES, MAX_TEXT_MESSAGE_BYTES,
-  RATE_LIMIT_BURST, RATE_LIMIT_PER_SEC, INVALID_LOG_INTERVAL_MS, MS_PER_SECOND, LEAVE_GRACE_MS,
+  RATE_LIMIT_BURST, RATE_LIMIT_PER_SEC, INVALID_LOG_INTERVAL_MS, MS_PER_SECOND, LEAVE_GRACE_MS, MAX_PLAYERS,
 } from '../shared/constants.js';
 import {
   ByteReader, ByteWriter, decodeInput, decodePing, encodePong, takeBytes, parseClientText, makeError,
@@ -191,7 +191,7 @@ export class HostServer {
     this.leave(client);
     if (msg.t === 'leave') return;
     if (this.room.addClient(client, msg.name, msg.brawler) < 0) {
-      client.send(makeError('Partie pleine : 12 joueurs maximum.'));
+      client.send(makeError(`Partie pleine : ${MAX_PLAYERS} joueurs maximum.`));
     }
   }
 
@@ -239,7 +239,9 @@ export function createHostSocket(room) {
   const peer = new Peer(PEER_PREFIX + room);
 
   peer.on('open', () => {
-    if (closed) return;
+    // PeerJS émet aussi open après une reconnexion au service de rendez-vous.
+    // Ne jamais remplacer le monde auquel les invités sont déjà connectés.
+    if (closed || server !== null) return;
     server = new HostServer(room);
     // Le client de l'hôte reçoit les messages du salon en différé (comme par le réseau, sans réentrance).
     self = server.createClient((data) => queueMicrotask(() => { if (!closed) socket.onmessage(data); }));
@@ -311,7 +313,10 @@ export function createGuestSocket(room) {
     if (closed) return;
     closed = true;
     if (retryTimer !== null) clearTimeout(retryTimer);
-    if (peer !== null) peer.destroy();
+    const retired = peer;
+    peer = null;
+    conn = null;
+    if (retired !== null) retired.destroy();
     if (opened) socket.onclose();
     else socket.onfail(message);
   };
@@ -322,12 +327,16 @@ export function createGuestSocket(room) {
     attempts++;
     const p = new Peer();
     peer = p;
-    retryTimer = setTimeout(() => {
+    const retry = (/** @type {string} */ message) => {
       if (closed || opened || peer !== p) return;
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      peer = null;
+      conn = null;
       p.destroy();
       if (attempts < GUEST_CONNECT_ATTEMPTS) attempt();
-      else fail('La connexion à la partie a échoué. Réessaie dans un instant.');
-    }, GUEST_ATTEMPT_TIMEOUT_MS);
+      else fail(message);
+    };
+    retryTimer = setTimeout(() => retry('La connexion à la partie a échoué. Réessaie dans un instant.'), GUEST_ATTEMPT_TIMEOUT_MS);
 
     p.on('open', () => {
       if (closed || peer !== p) return;
@@ -344,14 +353,23 @@ export function createGuestSocket(room) {
         const data = normalizeIncoming(raw);
         if (data !== null && !closed) socket.onmessage(data);
       });
-      c.on('close', () => { if (peer === p && opened) fail("L'hôte a fermé la partie."); });
-      c.on('error', () => { if (peer === p && opened) fail('La connexion à la partie a échoué.'); });
+      c.on('close', () => {
+        if (peer !== p || closed) return;
+        if (opened) fail("L'hôte a fermé la partie.");
+        else retry('La connexion à la partie a échoué.');
+      });
+      c.on('error', () => {
+        if (peer !== p || closed) return;
+        if (opened) fail('La connexion à la partie a échoué.');
+        else retry('La connexion à la partie a échoué.');
+      });
     });
     p.on('error', (/** @type {any} */ err) => {
       if (peer !== p) return;
       // Une fois en jeu, seule la fermeture du canal compte (le service de mise en relation peut tomber sans gêner).
-      if (opened && err?.type !== 'peer-unavailable') return;
-      fail(describePeerError(err));
+      if (closed || opened) return;
+      if (['peer-unavailable', 'browser-incompatible', 'unavailable-id', 'invalid-id'].includes(err?.type)) fail(describePeerError(err));
+      else retry(describePeerError(err));
     });
   };
   attempt();
@@ -363,7 +381,10 @@ export function createGuestSocket(room) {
     if (closed) return;
     closed = true;
     if (retryTimer !== null) clearTimeout(retryTimer);
-    if (peer !== null) peer.destroy();
+    const retired = peer;
+    peer = null;
+    conn = null;
+    if (retired !== null) retired.destroy();
   };
   return socket;
 }
