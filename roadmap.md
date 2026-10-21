@@ -11,3 +11,4 @@
 - [x] Final French report to the user
 - [x] Balance patch (Yann, Vladimir, Mathéo, Mohammed, Adam, Clément, Breuer)
 - [x] End-of-round screen: scoreboard K.O./morts, podium, change character
+- [x] Increase room capacity to 32; preserve room across signaling recovery; verify 32 admissions and real three-browser visibility

@@ -52,7 +52,8 @@ export const DESK_HEIGHT = 0.9;
 // ============================================================================
 // CAPACITÉS (tout est pré-alloué à ces tailles)
 // ============================================================================
-export const MAX_PLAYERS = 12;
+// 32 slots: les masques de contacts utilisent un bit par joueur (32 bits).
+export const MAX_PLAYERS = 32;
 export const MAX_BOTS = 6;
 export const MAX_PROJECTILES = 192;
 export const MAX_ZONES = 24;
