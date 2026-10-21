@@ -58,7 +58,7 @@ export function createBot(slot) {
   return {
     slot, ref: BOT_REF_BASE + slot, active: false, team: TEAM_BOTS, type: 0, x: FLOAT_ZERO, y: FLOAT_ZERO, radius: HALF, angle: FLOAT_ZERO,
     hp: FLOAT_ZERO, maxHp: 1, state: BOT_STATE.IDLE, stateMs: FLOAT_ZERO, cooldownMs: FLOAT_ZERO, targetRef: REF_NONE, retargetTicks: 0,
-    stunMs: FLOAT_ZERO, slowMs: FLOAT_ZERO, slowFactor: 1, blindMs: FLOAT_ZERO, kbVX: FLOAT_ZERO, kbVY: FLOAT_ZERO, chargeDirX: FLOAT_ZERO, chargeDirY: FLOAT_ZERO,
+    stunMs: FLOAT_ZERO, slowMs: FLOAT_ZERO, slowFactor: 1, blindMs: FLOAT_ZERO, kbVX: FLOAT_ZERO, kbVY: FLOAT_ZERO, chargeDirX: FLOAT_ZERO, chargeDirY: FLOAT_ZERO, strikeX: FLOAT_ZERO, strikeY: FLOAT_ZERO,
     hitPlayers: 0, leapMs: FLOAT_ZERO,
   };
 }

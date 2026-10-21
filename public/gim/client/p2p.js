@@ -81,6 +81,8 @@ class ClientConn {
     this.invalidCount = 0;
     this.lastInvalidLog = -INVALID_LOG_INTERVAL_MS;
     this.leftAt = -Infinity;
+    this.starveTicks = 0;
+    this.inputDebt = 0;
   }
   consumeToken() {
     const now = performance.now();
@@ -103,7 +105,7 @@ class ClientConn {
   send(data) { this.sendFn(data); }
 }
 
-class HostServer {
+export class HostServer {
   /** @param {string} roomId */
   constructor(roomId) {
     this.room = new Room(roomId, (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0);
@@ -114,6 +116,8 @@ class HostServer {
     this.running = true;
     this.lastLoop = performance.now();
     this.accumulator = 0;
+    /** Horloge de simulation : avance d'exactement TICK_MS par tick (snapshots datés sans doublon, même en rattrapage). */
+    this.simTime = this.lastLoop;
     /** @type {ReturnType<typeof setTimeout>|null} */
     this.timer = null;
     /** @type {Worker|null} */
@@ -168,7 +172,7 @@ class HostServer {
     } else if (type === MSG.PING) {
       const clientTime = decodePing(reader);
       if (Number.isNaN(clientTime)) { client.reject('ping invalide'); return; }
-      encodePong(this.pongWriter, clientTime, performance.now());
+      encodePong(this.pongWriter, clientTime, this.simTime + this.accumulator + (performance.now() - this.lastLoop));
       client.send(takeBytes(this.pongWriter));
     } else {
       client.reject(`type de message inconnu (${type})`);
@@ -200,7 +204,8 @@ class HostServer {
     this.lastLoop = now;
     let ticks = 0;
     while (this.accumulator >= TICK_MS && ticks < MAX_CATCHUP_TICKS) {
-      this.room.tick(now);
+      this.simTime += TICK_MS;
+      this.room.tick(this.simTime);
       this.accumulator -= TICK_MS;
       ticks++;
     }
