@@ -1,43 +1,20 @@
-/**
- * Toutes les constantes du jeu, partagées par le client et le serveur.
- * Règle : aucun nombre « magique » dans la logique ; s'il faut régler quelque chose, c'est ici.
- * Unités : mètres, millisecondes, radians (sauf mention contraire).
- */
-
-// ============================================================================
-// TEMPS
-// ============================================================================
 export const TICK_RATE = 30;
 export const TICK_MS = 1000 / TICK_RATE;
 export const SNAPSHOT_RATE = 20;
 export const SNAPSHOT_INTERVAL_MS = 1000 / SNAPSHOT_RATE;
-/** Tolérance sur les minuteries : évite qu'un arrondi flottant décale une recharge d'un tick entre client et serveur. */
 export const TIMER_EPSILON_MS = 0.5;
-/** Nombre max de ticks rattrapés d'un coup par le serveur après un gel du processus. */
 export const MAX_CATCHUP_TICKS = 10;
-/** Plafond du delta de frame côté client : évite l'emballement au retour d'un onglet inactif. */
 export const MAX_FRAME_DELTA_MS = 250;
 export const MS_PER_SECOND = 1000;
-/**
- * Zéro « flottant » pour initialiser les champs numériques non entiers des objets pré-alloués.
- * V8 fixe la représentation d'un champ à sa première écriture : un champ né à 0 (petit entier) qui reçoit
- * ensuite 1.5 fait migrer toutes les instances, et les écritures peuvent finir « emballées » (une allocation
- * par écriture, donc du GC à chaque tick). -0 n'est pas un petit entier pour V8 : le champ naît « double ».
- */
 export const FLOAT_ZERO = -0;
 
-// ============================================================================
-// ARÈNE (coordonnées : x vers la droite, y vers le bas de l'écran, origine au coin haut-gauche)
-// ============================================================================
 export const ARENA_WIDTH = 40;
 export const ARENA_HEIGHT = 26;
 export const WALL_THICKNESS = 1;
 export const WALL_HEIGHT = 1.6;
 export const NAV_CELL_SIZE = 1;
-/** Marge ajoutée autour des obstacles dans la grille de navigation des profs (≈ rayon d'un prof). */
 export const NAV_INFLATE = 0.5;
 export const NAV_UNREACHED = -1;
-/** Petites itérations de résolution : 2 passes suffisent à sortir proprement des coins. */
 export const COLLISION_ITERATIONS = 2;
 export const COLLISION_EPSILON = 1e-6;
 
@@ -50,10 +27,6 @@ export const LOCKER_HEIGHT = 2.1;
 export const PILLAR_HEIGHT = 3.2;
 export const DESK_HEIGHT = 0.9;
 
-// ============================================================================
-// CAPACITÉS (tout est pré-alloué à ces tailles)
-// ============================================================================
-// 32 slots: les masques de contacts utilisent un bit par joueur (32 bits).
 export const MAX_PLAYERS = 32;
 export const MAX_BOTS = 6;
 export const MAX_PROJECTILES = 192;
@@ -62,13 +35,9 @@ export const EVENT_RING_SIZE = 256;
 export const MAX_EVENTS_PER_SNAPSHOT = 64;
 export const MAX_INPUT_QUEUE = 30;
 
-/** Références d'entité compactes (1 octet) : 0..63 = joueurs, 64..127 = profs. */
 export const REF_NONE = 255;
 export const BOT_REF_BASE = 64;
 
-// ============================================================================
-// ÉQUIPES & PARTIE
-// ============================================================================
 export const TEAM_A = 0;
 export const TEAM_B = 1;
 export const TEAM_BOTS = 2;
@@ -76,16 +45,14 @@ export const TEAM_COUNT = 2;
 export const TEAM_NAMES = Object.freeze(['BLEUS', 'ROUGES', 'PROFS']);
 
 export const ROUND_DURATION_MS = 180000;
-/** Durées de manche proposées à l'hôte dans le salon d'attente (minutes). */
 export const ROUND_DURATION_CHOICES_MIN = Object.freeze([1, 2, 3, 5, 10]);
 export const MAX_ROUND_DURATION_MS = 600000;
-/** Cartes : 0 = la salle de classe d'origine, 1 = le CDI (cachettes). Mode « les deux » : tirage à chaque manche. */
 export const MAP_CLASSE = 0;
 export const MAP_CDI = 1;
-export const MAP_COUNT = 2;
-export const MAP_MODE_BOTH = 2;
-export const MAP_NAMES = Object.freeze(['La salle de classe', 'Le CDI']);
-/** Cachettes (portemanteaux) : un ennemi n'est vu qu'à moins de cette distance, ou pendant un court instant après avoir attaqué. */
+export const MAP_BR = 2;
+export const MAP_COUNT = 3;
+export const MAP_MODE_ALL = 3;
+export const MAP_NAMES = Object.freeze(['La salle de classe', 'Le CDI', 'Grande Cour (Battle Royale)']);
 export const HIDE_SEE_DISTANCE = 2.6;
 export const HIDE_REVEAL_MS = 1200;
 export const ROUND_END_PAUSE_MS = 15000;
@@ -95,49 +62,39 @@ export const ROUND_DRAW = 2;
 export const SCORE_PER_PLAYER_KO = 1;
 export const SCORE_PER_BOT_KO = 1;
 
-// ============================================================================
-// JOUEURS
-// ============================================================================
+// --- NOUVEAUTÉS BATTLE ROYALE ---
+export const MODE_TDM = 0;
+export const MODE_BR = 1;
+export const STORM_DAMAGE_PER_SEC = 350;
+export const STORM_SHRINK_SPEED = 0.35;
+export const STORM_SAFE_RADIUS = 2;
+
 export const RESPAWN_MS = 3000;
 export const SPAWN_SHIELD_MS = 1500;
 export const SUPER_MAX = 1;
 export const REGEN_DELAY_MS = 3000;
 export const REGEN_FRACTION_PER_SEC = 0.08;
-/** Amortissement exponentiel des projections (1/s) : plus grand = recul plus court. */
 export const KNOCKBACK_DAMPING = 7;
 export const KNOCKBACK_MIN_SPEED = 0.05;
-/** Distance de visée maximale transmise par le client (normalisée 0..1 sur cette valeur). */
 export const MAX_AIM_DISTANCE = 12;
 export const AUTO_AIM_RANGE_FACTOR = 1.3;
-/** Rayon de contact ajouté pour les attaques « en fonçant » (trottinette, charge de prof). */
 export const CONTACT_MARGIN = 0.2;
 export const HALF = 0.5;
 export const TWO_PI = Math.PI * 2;
 
-// ============================================================================
-// ZONES AU SOL
-// ============================================================================
 export const ZONE_TICK_MS = 250;
 
-// ============================================================================
-// PROFS (BOTS)
-// ============================================================================
 export const BOT_FIRST_SPAWN_MS = 8000;
 export const BOT_SPAWN_INTERVAL_MS = 11000;
 export const BOTS_BASE_COUNT = 1;
 export const BOTS_PER_PLAYER = 0.5;
 export const BOT_RETARGET_TICKS = 10;
 export const NAV_UPDATE_TICKS = 6;
-/** En dessous de cette distance et en ligne de vue, le prof fonce droit (plus fluide que la grille). */
 export const BOT_DIRECT_CHASE_DIST = 7;
 export const BOT_SEPARATION_STRENGTH = 0.5;
-/** Un prof qui charge dans un mur reste sonné : récompense l'esquive. */
 export const BOT_WALL_STUN_MS = 1400;
 export const BOT_TURN_RATE = 8;
 
-// ============================================================================
-// ENTRÉES (boutons en champ de bits, actions renvoyées par la simulation)
-// ============================================================================
 export const BTN_ATTACK = 1;
 export const BTN_SUPER = 2;
 export const BTN_AUTO_AIM = 4;
@@ -147,7 +104,6 @@ export const ACTION_FIRED_MAIN = 1;
 export const ACTION_FIRED_SUPER = 2;
 export const ACTION_LEAP_LANDED = 4;
 
-/** Bits d'état d'un joueur envoyés dans les snapshots. */
 export const PF_DEAD = 1;
 export const PF_STUNNED = 2;
 export const PF_SLOWED = 4;
@@ -159,14 +115,10 @@ export const PF_DASH = 128;
 export const PF_AIRBORNE = 256;
 export const PF_TEAM_B = 512;
 
-/** Bits d'état d'un prof. */
 export const BF_STUNNED = 1;
 export const BF_SLOWED = 2;
 export const BF_BLIND = 4;
 
-// ============================================================================
-// TYPES D'ATTAQUES, VISUELS, ÉVÉNEMENTS
-// ============================================================================
 export const ATTACK_KIND = Object.freeze({
   PROJECTILE: 1, LOB: 2, MELEE: 3, BEAM: 4, DASH: 5, NOVA: 6, ZONE_SELF: 7, BUFF: 8, LEAP: 9,
 });
@@ -185,27 +137,20 @@ export const EVENT = Object.freeze({
 export const BOT_BEHAVIOR = Object.freeze({ MELEE: 1, CHARGE: 2 });
 export const BOT_STATE = Object.freeze({ IDLE: 0, CHASE: 1, WINDUP: 2, CHARGE: 3, RECOVER: 4 });
 
-// ============================================================================
-// RÉSEAU
-// ============================================================================
 export const MSG = Object.freeze({ INPUT: 1, PING: 2, SNAPSHOT: 10, PONG: 11 });
 export const INPUT_MESSAGE_BYTES = 13;
 export const PING_MESSAGE_BYTES = 9;
 export const PONG_MESSAGE_BYTES = 17;
 export const MAX_BINARY_MESSAGE_BYTES = 32;
 export const MAX_TEXT_MESSAGE_BYTES = 256;
-/** Garde-fou bas niveau de `ws` : une trame plus grosse coupe la connexion. */
 export const WS_MAX_PAYLOAD_BYTES = 1024;
 export const SNAPSHOT_BUFFER_BYTES = 16384;
 export const RATE_LIMIT_BURST = 60;
 export const RATE_LIMIT_PER_SEC = 45;
 export const MAX_SEQ_JUMP = 900;
-/** Au-delà de ce retard d'inputs en file, le serveur en traite 2 par tick pour rattraper. */
 export const INPUT_CATCHUP_THRESHOLD = 4;
-/** File d'inputs vide : le serveur attend l'input en retard pendant ce nombre de ticks avant d'avancer « à vide ». */
 export const INPUT_STARVE_GRACE_TICKS = 6;
 export const INVALID_LOG_INTERVAL_MS = 5000;
-/** Après un retour au menu, les inputs encore en vol pendant ce délai sont ignorés sans être journalisés. */
 export const LEAVE_GRACE_MS = 2000;
 export const MAX_NAME_LENGTH = 16;
 export const MAX_ROOM_LENGTH = 16;
@@ -213,7 +158,6 @@ export const DEFAULT_ROOM = 'gim';
 export const DEFAULT_PORT = 3000;
 export const MAX_ROOMS = 16;
 
-/** Quantifications (entiers sur le fil) */
 export const POS_SCALE = 100;
 export const ANGLE_QUANT_MAX = 65535;
 export const MOVE_QUANT = 127;
@@ -226,13 +170,11 @@ export const UINT16_MAX = 65535;
 export const UINT8_MAX = 255;
 export const NET_ID_MASK = 0xffff;
 
-/** Three.js : servi depuis client/vendor/ s'il a été téléchargé (npm run vendor), sinon redirigé vers le CDN. */
 export const THREE_VERSION = '0.170.0';
 export const THREE_CDN_BASE = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/`;
 
 export const PING_INTERVAL_MS = 1000;
 export const INTERP_DELAY_MS = 100;
-/** Délai d'interpolation adaptatif (réseau qui saccade) : jamais au-delà. */
 export const MAX_INTERP_DELAY_MS = 250;
 export const CLOCK_SMOOTHING = 0.1;
 export const CLOCK_SNAP_THRESHOLD_MS = 250;
@@ -241,16 +183,11 @@ export const SNAPSHOT_BUFFER_SIZE = 32;
 export const PENDING_INPUT_CAPACITY = 128;
 export const RECONNECT_DELAY_MS = 2000;
 
-// ============================================================================
-// RENDU 3D
-// ============================================================================
 export const CAMERA_FOV = 40;
 export const CAMERA_NEAR = 0.5;
 export const CAMERA_FAR = 200;
-/** Position de la caméra relative au joueur : en hauteur et en arrière (vers le bas de l'écran). */
 export const CAMERA_HEIGHT = 18;
 export const CAMERA_BACK = 10;
-/** Sur écran étroit (portrait), on recule la caméra pour voir au moins cette largeur de terrain. */
 export const CAMERA_MIN_VISIBLE_WIDTH = 16;
 export const CAMERA_DAMPING = 7;
 export const CAMERA_AIM_LEAD = 2.2;
@@ -303,13 +240,11 @@ export const ZONE_EMBER_CHANCE = 0.35;
 export const PROJECTILE_SPIN = 9;
 
 export const TEAM_COLORS = Object.freeze([0x3d8bff, 0xff4d5e, 0xffa62b]);
-/** Anneau doré sous son propre perso : on se repère tout de suite dans la mêlée. */
 export const LOCAL_RING_COLOR = 0xffe14d;
 export const AIM_COLOR = 0xffffff;
 export const AIM_SUPER_COLOR = 0xffd23f;
 export const AIM_OPACITY = 0.22;
 export const AIM_LINE_WIDTH = 0.5;
-/** Le canvas WebGL sert de « tableau noir » derrière le menu. */
 export const MENU_BG_COLOR = 0x1e3b2f;
 export const PREVIEW_BG_COLOR = 0x24493a;
 export const CONNECT_TIMEOUT_MS = 20000;
@@ -326,9 +261,6 @@ export const FLOOR_TEXTURE_PX_PER_M = 32;
 export const WALL_COLOR = 0x6b7a99;
 export const WALL_TOP_COLOR = 0x8a98b8;
 
-// ============================================================================
-// HUD (pixels CSS)
-// ============================================================================
 export const HUD_MARGIN = 12;
 export const HUD_FONT = '700 14px system-ui, sans-serif';
 export const HUD_FONT_SMALL = '600 11px system-ui, sans-serif';
@@ -346,25 +278,18 @@ export const BLIND_VISIBLE_RADIUS = 0.16;
 export const FPS_SMOOTHING = 0.05;
 export const MAX_CACHED_NUMBER = 9999;
 
-// ============================================================================
-// COMMANDES TACTILES
-// ============================================================================
 export const JOYSTICK_RADIUS_PX = 58;
 export const JOYSTICK_KNOB_PX = 26;
 export const JOYSTICK_DEADZONE_PX = 10;
 export const TAP_MAX_MS = 220;
 export const ATTACK_LATCH_MS = 350;
 export const SUPER_BUTTON_RADIUS_PX = 40;
-/** Position du bouton super : fraction de la largeur/hauteur de l'écran. */
 export const SUPER_BUTTON_X = 0.87;
 export const SUPER_BUTTON_Y = 0.52;
 export const JOYSTICK_LEFT_HOME_X = 0.14;
 export const JOYSTICK_RIGHT_HOME_X = 0.8;
 export const JOYSTICK_HOME_Y = 0.78;
 
-// ============================================================================
-// AUDIO
-// ============================================================================
 export const MASTER_VOLUME = 0.45;
 export const MAX_AUDIO_VOICES = 14;
 export const AUDIO_SYNTH_RATE = 22050;
