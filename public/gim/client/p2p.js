@@ -20,17 +20,28 @@ import { Room, InputQueue } from '../server/room.js';
 
 const PEER_PREFIX = 'gimbattle-v1-';
 /** Invité : délai avant de retenter une mise en relation restée bloquée, et nombre d'essais. */
-// Un téléphone en 4G (souvent un iPhone) passe par un relais et met parfois plus de 6 s : on lui laisse le temps.
 const GUEST_ATTEMPT_TIMEOUT_MS = 11000;
 const GUEST_CONNECT_ATTEMPTS = 4;
-/** Serveurs STUN/TURN : plusieurs adresses, dont un relais TURN joignable par TCP pour les réseaux mobiles stricts. */
+
+/** Serveurs STUN/TURN fiables pour traverser les pare-feux 4G/5G et iPhone */
 const PEER_OPTIONS = {
   config: {
     iceServers: [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-      { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' },
-    ],
-  },
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      {
+        urls: [
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp'
+        ],
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
+    ]
+  }
 };
 
 /**
@@ -142,8 +153,6 @@ export class HostServer {
     this.timer = null;
     /** @type {Worker|null} */
     this.ticker = null;
-    // Horloge dans un Worker : régulière même si l'onglet de l'hôte est chargé ou en arrière-plan
-    // (les minuteurs de la page sont ralentis par le navigateur, ce qui faisait « glisser » les persos).
     try {
       const url = URL.createObjectURL(new Blob([`setInterval(() => postMessage(0), ${Math.max(1, Math.floor(TICK_MS / 4))});`], { type: 'text/javascript' }));
       this.ticker = new Worker(url);
@@ -312,11 +321,8 @@ export function createHostSocket(room) {
   const peer = new Peer(PEER_PREFIX + room, PEER_OPTIONS);
 
   peer.on('open', () => {
-    // PeerJS émet aussi open après une reconnexion au service de rendez-vous.
-    // Ne jamais remplacer le monde auquel les invités sont déjà connectés.
     if (closed || server !== null) return;
     server = new HostServer(room);
-    // Le client de l'hôte reçoit les messages du salon en différé (comme par le réseau, sans réentrance).
     self = server.createClient((data) => queueMicrotask(() => { if (!closed) socket.onmessage(data); }));
     server.hostClient = self;
     socket.onopen();
@@ -346,7 +352,6 @@ export function createHostSocket(room) {
       console.warn('[p2p hôte]', err?.type ?? err);
     }
   });
-  // Perte du service de mise en relation : les invités déjà connectés continuent à jouer ; on retente pour les nouveaux.
   peer.on('disconnected', () => { if (!closed) setTimeout(() => { if (!closed && peer.disconnected) peer.reconnect(); }, 1000); });
 
   socket.send = (data) => {
@@ -395,8 +400,6 @@ export function createGuestSocket(room) {
     else socket.onfail(message);
   };
 
-  // Une mise en relation WebRTC reste parfois bloquée sans erreur (environ 1 fois sur 6 en test) :
-  // si le canal ne s'ouvre pas vite, on recommence avec une connexion neuve au lieu d'attendre indéfiniment.
   const attempt = () => {
     attempts++;
     const p = new Peer(PEER_OPTIONS);
@@ -440,7 +443,6 @@ export function createGuestSocket(room) {
     });
     p.on('error', (/** @type {any} */ err) => {
       if (peer !== p) return;
-      // Une fois en jeu, seule la fermeture du canal compte (le service de mise en relation peut tomber sans gêner).
       if (closed || opened) return;
       if (['peer-unavailable', 'browser-incompatible', 'unavailable-id', 'invalid-id'].includes(err?.type)) fail(describePeerError(err));
       else retry(describePeerError(err));
