@@ -69,7 +69,7 @@ export class Renderer {
     ctx.strokeStyle = FLOOR_LINE_COLOR; ctx.lineWidth = 1;
     for (let x = 0; x <= this.arena.width; x++) { ctx.beginPath(); ctx.moveTo(x * px, 0); ctx.lineTo(x * px, canvas.height); ctx.stroke(); }
     for (let y = 0; y <= this.arena.height; y++) { ctx.beginPath(); ctx.moveTo(0, y * px); ctx.lineTo(canvas.width, y * px); ctx.stroke(); }
-    if (this.arena.id !== 2) { // Pas de zones d'apparition teintées en BR
+    if (this.arena.id !== 2) { 
       ctx.fillStyle = 'rgba(61,139,255,0.18)'; ctx.fillRect(0, 0, DECOR.SPAWN_TINT * px, canvas.height);
       ctx.fillStyle = 'rgba(255,77,94,0.18)'; ctx.fillRect(canvas.width - DECOR.SPAWN_TINT * px, 0, DECOR.SPAWN_TINT * px, canvas.height);
       ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = px * 0.12;
@@ -225,7 +225,6 @@ export class Renderer {
   renderGame(views, dt, time, aim, spectateRef = -1) {
     this.setArena(MAPS[views.mapId]);
     
-    // Gérer la tempête BR
     if (views.gameMode === MODE_BR && views.stormRadius < 200) {
       this.stormMesh.visible = true;
       this.stormMesh.position.set(views.stormX - (this.arena.width * HALF), 20, views.stormY - (this.arena.height * HALF));
@@ -282,13 +281,7 @@ export class Renderer {
       if (this.pendingAttack[slot] > 0) { if (performance.now() - this.pendingAttack[slot] < 300) triggerAttack(model); this.pendingAttack[slot] = 0; }
       
       let ringColor;
-      if (slot === views.localSlot) {
-        ringColor = LOCAL_RING_COLOR;
-      } else if (views.gameMode === MODE_BR) {
-        ringColor = 0xff4d5e; // Tous les ennemis sont rouges en BR
-      } else {
-        ringColor = TEAM_COLORS[v.team];
-      }
+      if (slot === views.localSlot) { ringColor = LOCAL_RING_COLOR; } else if (views.gameMode === MODE_BR) { ringColor = 0xff4d5e; } else { ringColor = TEAM_COLORS[v.team]; }
       setRingColor(model, ringColor);
       
       setInvisibleLook(model, (v.flags & PF_INVISIBLE) !== 0 || (this.arena.hideouts.length > 0 && inHideout(this.arena, v.x, v.y)));
