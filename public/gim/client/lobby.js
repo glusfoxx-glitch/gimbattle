@@ -1,5 +1,5 @@
 import { BRAWLERS } from '../shared/brawlers.js';
-import { MAP_NAMES, ROUND_DURATION_CHOICES_MIN } from '../shared/constants.js';
+import { MAP_NAMES, ROUND_DURATION_CHOICES_MIN, MODE_TDM, MODE_BR } from '../shared/constants.js';
 
 function node(tag, cls, text) {
   const e = document.createElement(tag);
@@ -21,42 +21,62 @@ export class Lobby {
     const leave = node('button', 'results-close', 'Quitter');
     leave.type = 'button'; leave.addEventListener('click', onLeave);
     header.append(brand, heading, leave);
+    
     const content = node('div', 'lobby-content');
     const roster = node('section', 'lobby-roster');
     this.count = node('h2', 'hand section-title');
     this.players = node('ul', 'lobby-players');
     roster.append(this.count, this.players);
+    
     const settings = node('section', 'lobby-settings');
     settings.append(node('h2', 'hand section-title', 'La prochaine partie'));
+    
+    // Mode de jeu
+    const modeLabel = node('label', 'field', 'Mode de jeu');
+    this.gameMode = node('select', 'lobby-select');
+    this.gameMode.append(node('option', '', 'Match à Mort (Bleus vs Rouges)'));
+    this.gameMode.lastChild.value = String(MODE_TDM);
+    this.gameMode.append(node('option', '', 'Battle Royale (Chacun pour soi)'));
+    this.gameMode.lastChild.value = String(MODE_BR);
+    modeLabel.append(this.gameMode);
+
     const durationLabel = node('label', 'field', 'Durée de la manche');
     this.duration = node('select', 'lobby-select');
-    this.duration.setAttribute('aria-label', 'Durée de la manche');
     for (const minutes of ROUND_DURATION_CHOICES_MIN) {
       const opt = node('option', '', `${minutes} minute${minutes > 1 ? 's' : ''}`);
       opt.value = String(minutes); this.duration.append(opt);
     }
     durationLabel.append(this.duration);
+    
     const mapLabel = node('label', 'field', 'Carte');
-    this.map = node('select', 'lobby-select'); this.map.setAttribute('aria-label', 'Carte');
-    [...MAP_NAMES, 'Les deux · alternance'].forEach((name, i) => {
+    this.map = node('select', 'lobby-select');
+    [...MAP_NAMES, 'Les 3 · alternance'].forEach((name, i) => {
       const opt = node('option', '', name); opt.value = String(i); this.map.append(opt);
     });
     mapLabel.append(this.map);
-    const changed = () => onSettings(Number(this.duration.value), Number(this.map.value));
-    this.duration.addEventListener('change', changed); this.map.addEventListener('change', changed);
+    
+    const changed = () => onSettings(Number(this.duration.value), Number(this.map.value), Number(this.gameMode.value));
+    this.duration.addEventListener('change', changed); 
+    this.map.addEventListener('change', changed);
+    this.gameMode.addEventListener('change', changed);
+    
     this.authority = node('p', 'lobby-authority');
     this.start = node('button', 'play', 'Lancer la partie'); this.start.type = 'button';
     this.start.addEventListener('click', onStart);
-    settings.append(durationLabel, mapLabel, this.authority, this.start);
+    settings.append(modeLabel, durationLabel, mapLabel, this.authority, this.start);
     content.append(roster, settings);
+    
     const picks = node('section', 'lobby-picks');
-    picks.append(node('h2', 'hand section-title', 'Ton personnage'));
+    this.pickTitle = node('h2', 'hand section-title', 'Ton personnage');
+    picks.append(this.pickTitle);
     const grid = node('div', 'lobby-pick-grid');
     this.buttons = BRAWLERS.map((b) => {
       const btn = node('button', 'card', b.name); btn.type = 'button';
       btn.addEventListener('click', () => onPick(b.id)); grid.append(btn); return btn;
     });
     picks.append(grid);
+    this.picksSection = picks;
+    
     this.root.append(header, content, picks); document.body.append(this.root);
   }
   show(data, room) {
@@ -64,18 +84,33 @@ export class Lobby {
     this.count.textContent = `${data.players.length} joueur${data.players.length > 1 ? 's' : ''}`;
     this.players.replaceChildren();
     for (const p of data.players) {
-      const row = node('li', p.id === data.you ? 'lobby-player is-me' : 'lobby-player');
-      row.append(node('strong', '', `${p.name}${p.id === data.you ? ' · toi' : ''}`),
-        node('span', '', BRAWLERS[p.brawler].name), node('span', 'lobby-host', p.id === data.host ? 'Hôte' : 'Prêt'));
+      const isMe = p.id === data.you;
+      const row = node('li', isMe ? 'lobby-player is-me' : 'lobby-player');
+      row.append(
+        node('strong', '', `${p.name}${isMe ? ' · toi' : ''}`),
+        node('span', '', data.gameMode === MODE_BR ? '???' : BRAWLERS[p.brawler].name), 
+        node('span', 'lobby-host', p.id === data.host ? 'Hôte' : 'Prêt')
+      );
       this.players.append(row);
     }
     const host = data.you === data.host;
-    this.duration.value = String(data.minutes); this.map.value = String(data.map);
-    this.duration.disabled = !host; this.map.disabled = !host;
+    this.duration.value = String(data.minutes); 
+    this.map.value = String(data.map);
+    this.gameMode.value = String(data.gameMode);
+    
+    this.duration.disabled = !host; 
+    this.map.disabled = !host;
+    this.gameMode.disabled = !host;
     this.start.hidden = !host;
     this.authority.textContent = host ? '' : 'En attente du lancement par l’hôte';
-    const me = data.players.find(p => p.id === data.you);
-    this.buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(i === me?.brawler)));
+    
+    if (data.gameMode === MODE_BR) {
+      this.picksSection.hidden = true;
+    } else {
+      this.picksSection.hidden = false;
+      const me = data.players.find(p => p.id === data.you);
+      this.buttons.forEach((b, i) => b.setAttribute('aria-pressed', String(i === me?.brawler)));
+    }
     this.root.hidden = false;
   }
   hide() { this.root.hidden = true; }
