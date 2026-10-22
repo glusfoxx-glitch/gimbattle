@@ -158,7 +158,7 @@ function writeEvents(w, world, fromId, viewerTeam, viewer) {
 
 export function encodeSnapshot(w, world, ctx) {
   w.reset(); w.u8(MSG.SNAPSHOT); w.u32(world.tick >>> 0); w.f64(ctx.serverTime); w.u32(ctx.ackSeq >>> 0);
-  w.u8(world.roundPhase); w.u8(world.mapId); w.u32(clampUint(world.roundMs, 0xffffffff));
+  w.u8(world.roundPhase); w.u8(world.arena.id); w.u32(clampUint(world.roundMs, 0xffffffff));
   w.u16(clampUint(world.scores[0], UINT16_MAX)); w.u16(clampUint(world.scores[1], UINT16_MAX));
   w.u8(world.gameMode); w.f32(world.stormRadius); w.f32(world.stormX); w.f32(world.stormY);
   
