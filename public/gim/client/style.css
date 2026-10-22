@@ -31,7 +31,6 @@ html, body {
   background: var(--board);
   color: var(--chalk);
   font-family: var(--ui);
-  /* Pas de défilement, pas de zoom, pas de sélection pendant qu'on joue au pouce. */
   touch-action: none;
   overscroll-behavior: none;
   -webkit-user-select: none;
@@ -50,7 +49,6 @@ html, body {
 
 .hand { font-family: var(--hand); font-weight: 400; }
 
-/* ------------------------------------------------------------------ menu */
 .menu {
   position: fixed;
   inset: 0;
@@ -98,7 +96,7 @@ html, body {
   max-width: 46ch;
 }
 
-.join { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.join { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
 
 .field { display: flex; flex-direction: column; gap: 2px; }
 .field span { font-size: 20px; color: var(--chalk-dim); line-height: 1; }
@@ -113,30 +111,6 @@ html, body {
   outline: none;
 }
 .field-room input { width: 8ch; }
-
-/* Créer / Rejoindre : interrupteur à deux gros boutons, impossible à rater. */
-.mode-toggle {
-  display: inline-flex;
-  border: 2px solid var(--chalk);
-  border-radius: 6px;
-  overflow: hidden;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
-}
-.mode-opt {
-  font: 800 16px var(--ui);
-  color: var(--chalk);
-  background: transparent;
-  border: 0;
-  padding: 8px 14px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.mode-opt + .mode-opt { border-left: 2px solid var(--chalk); }
-.mode-opt:hover { background: var(--board-raised); }
-.mode-opt.is-on { background: var(--chalk); color: var(--ink-dark); }
-.mode-opt:focus-visible { outline: 3px solid var(--marker); outline-offset: -3px; }
-.field input::placeholder { color: var(--chalk-faint); }
-.field input:focus-visible, .field select:focus-visible { border-bottom-color: var(--marker); }
 
 .play {
   font: 800 clamp(17px, 1.6vw, 21px) var(--ui);
@@ -154,7 +128,6 @@ html, body {
 .play:disabled { opacity: 0.55; cursor: wait; }
 .play:focus-visible, .card:focus-visible, .ingame-btn:focus-visible { outline: 3px solid var(--marker); outline-offset: 3px; }
 
-/* --------------------------------------------------- trombinoscope (gauche) */
 .roster {
   grid-area: roster;
   overflow: auto;
@@ -220,7 +193,6 @@ html, body {
 .grid-profs .card[aria-pressed='true'] .card-name,
 .grid-profs .card[aria-pressed='true'] .card-role { color: var(--paper); }
 
-/* ------------------------------------------------------- scène 3D (centre) */
 .stage {
   grid-area: stage;
   display: flex;
@@ -228,7 +200,6 @@ html, body {
   min-height: 0;
   text-align: center;
 }
-/* Fenêtre transparente : le canvas WebGL y dessine le perso (rendu « scissor »). */
 .preview { flex: 1 1 auto; min-height: 120px; }
 .role { margin: 0; font-size: 22px; color: var(--chalk-dim); }
 .name {
@@ -239,7 +210,6 @@ html, body {
   line-height: 1;
 }
 
-/* ------------------------------------------------ fiche cahier (droite) */
 .sheet {
   grid-area: sheet;
   min-height: 0;
@@ -288,7 +258,6 @@ html, body {
 .figures span em { font-style: normal; font-weight: 500; color: rgba(29, 36, 64, 0.7); }
 .ability[hidden] { display: none; }
 
-/* ------------------------------------------------------------------ bas */
 .menu-bottom {
   grid-area: bottom;
   display: flex;
@@ -300,7 +269,6 @@ html, body {
 .help { margin: 0; font-size: 13px; line-height: 1.45; color: var(--chalk-dim); max-width: 120ch; }
 .help strong { color: var(--chalk); }
 
-/* ----------------------------------------------------------- en partie */
 .ingame-btn {
   position: fixed;
   z-index: 5;
@@ -347,7 +315,6 @@ html, body {
 }
 .boot-error[hidden] { display: none; }
 
-/* ------------------------------------------- téléphone en paysage (peu de hauteur) */
 @media (max-height: 520px) {
   .menu { gap: 8px; grid-template-columns: minmax(230px, 1.15fr) minmax(130px, 0.65fr) minmax(230px, 1.1fr); }
   .menu-top { padding-bottom: 6px; }
@@ -363,7 +330,6 @@ html, body {
   .section-title small { font-size: 14px; }
   .profs-title { margin-top: 8px; }
   .grid { gap: 5px; }
-  /* Sur petit écran, la pastille devient la bordure gauche : toute la largeur reste au prénom. */
   .card { min-height: 34px; padding: 5px 4px 5px 7px; border-left: 5px solid var(--accent, var(--chalk)); }
   .card .dot { display: none; }
   .card .card-name { font-size: 12.5px; letter-spacing: -0.01em; }
@@ -378,8 +344,6 @@ html, body {
   .figures { font-size: 11.5px; }
 }
 
-/* ------------------------------------------------------------ portrait étroit */
-/* Le menu devient une page qui défile : sections empilées, chacune à sa hauteur naturelle. */
 @media (max-width: 760px) and (orientation: portrait) {
   .menu { display: flex; flex-direction: column; overflow-y: auto; }
   .roster, .sheet { flex: none; min-height: auto; overflow: visible; }
@@ -397,7 +361,6 @@ html, body {
 .title .logo { display: block; width: 150px; height: auto; }
 @media (max-width: 700px), (max-height: 500px) { .title .logo { width: 90px; } }
 
-/* ---------- Fin de manche : podium, scores, changement de perso ---------- */
 .results {
   position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
   background: rgba(10, 22, 16, 0.72); padding: 12px; overflow-y: auto;
@@ -452,3 +415,5 @@ html, body {
   .pick-opt { font-size: 12px; padding: 4px 9px; }
   .results-count { margin: 6px 0 4px; }
 }
+
+.results-next-map { margin: 0 0 10px; font-size: 18px; color: #ffd23f; font-weight: 700; }
