@@ -67,7 +67,7 @@ net.onResults = (res) => {
   if (state !== STATE_PLAYING) return; 
   input.setEnabled(false); 
   results.show(res, net.localSlot); 
-  spectateRef = -1; 
+  spectateRef = -1; // CORRECTION : On réinitialise la caméra au moment des résultats !
 };
 
 net.onError = (message) => { if (connectTimer !== null) clearTimeout(connectTimer); backToMenu(message, true); };
@@ -78,10 +78,12 @@ window.addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !(e.target 
 window.addEventListener('pointerdown', (e) => {
   if (state === STATE_PLAYING && net.views.gameMode === MODE_BR && net.views.localSlot >= 0) {
     const p = net.views.players[net.views.localSlot];
+    // Si le joueur local est mort, un clic permet de faire défiler les spectateurs
     if (p && (p.flags & PF_DEAD) !== 0) {
       let found = false;
       for (let i = 1; i <= MAX_PLAYERS; i++) {
         const nextId = (Math.max(0, spectateRef) + i) % MAX_PLAYERS;
+        // On ne se spectate jamais soi-même et on cherche un joueur en vie
         if (nextId !== net.localSlot && net.views.players[nextId].active && (net.views.players[nextId].flags & PF_DEAD) === 0) {
           spectateRef = nextId; found = true; break;
         }
@@ -140,6 +142,7 @@ function handleEvent(e) {
         renderer.addShake(SHAKE_KO); 
         if (e.a !== REF_NONE) hud.showToast(`Mis K.O. par ${net.nameOf(e.a)}`, now, MS_PER_SECOND * 2); 
         
+        // CORRECTION AUTOMATIQUE : Dès que tu meurs en BR, on bascule direct la caméra sur un survivant valide
         if (net.views.gameMode === MODE_BR) {
           for (let i = 0; i < MAX_PLAYERS; i++) {
             if (i !== local && net.views.players[i].active && (net.views.players[i].flags & PF_DEAD) === 0) {
