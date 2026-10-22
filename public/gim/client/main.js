@@ -38,7 +38,7 @@ const aimContext = { playerX: FLOAT_ZERO, playerY: FLOAT_ZERO, groundValid: fals
 const aimState = { visible: false, x: FLOAT_ZERO, y: FLOAT_ZERO, angle: FLOAT_ZERO, dist: FLOAT_ZERO, isSuper: false, brawlerId: 0 };
 const debugInfo = { ping: FLOAT_ZERO, serverTick: 0, pendingInputs: 0, correction: FLOAT_ZERO, particles: 0, particleCapacity: MAX_PARTICLES, drawCalls: 0 };
 
-let spectateRef = -1; // Pour le mode Spectateur BR
+let spectateRef = -1;
 
 function startGame(name, brawler, room, mode) {
   audio.unlock(); audio.play(SOUND.CLICK);
@@ -68,19 +68,15 @@ net.onClose = () => { if (state !== STATE_MENU) backToMenu("Connexion perdue.", 
 menuButton.addEventListener('click', () => { net.leave(); backToMenu('', false); });
 window.addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !(e.target instanceof HTMLInputElement)) audio.toggleMute(); });
 
-// CLIC SPECTATEUR BR
 window.addEventListener('pointerdown', (e) => {
   if (state === STATE_PLAYING && net.views.gameMode === MODE_BR && net.views.localSlot >= 0) {
     const p = net.views.players[net.views.localSlot];
     if (p && (p.flags & PF_DEAD) !== 0) {
-      // Trouver le prochain joueur vivant
       let found = false;
       for (let i = 1; i <= MAX_PLAYERS; i++) {
         const nextId = (Math.max(0, spectateRef) + i) % MAX_PLAYERS;
         if (net.views.players[nextId].active && (net.views.players[nextId].flags & PF_DEAD) === 0) {
-          spectateRef = nextId;
-          found = true;
-          break;
+          spectateRef = nextId; found = true; break;
         }
       }
       if (!found) spectateRef = -1;
@@ -139,7 +135,6 @@ function handleEvent(e) {
     case EVENT.ROUND_END: { 
       let bannerTitle = WINNER_TEXT[e.c <= ROUND_DRAW ? e.c : ROUND_DRAW];
       if (net.views.gameMode === MODE_BR && e.c !== ROUND_DRAW) {
-        // En BR, l'équipe gagnante est l'id du joueur + 10 (envoyé dans l'évent ROUND_END)
         const winnerSlot = e.c - 10;
         bannerTitle = `Victoire de ${net.roster[winnerSlot]?.name || "l'élève"} !`;
       }
