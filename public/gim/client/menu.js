@@ -121,4 +121,22 @@ export class Menu {
   }
 
   renderBrawler(b) {
-    byId('sel-name').textContent = b.name; byId('
+    byId('sel-name').textContent = b.name; byId('sel-role').textContent = b.role;
+    this.renderStats([ ['PV', b.hp, this.maxHp, NUMBER.format(b.hp)], ['Vitesse', b.speed, this.maxSpeed, `${NUMBER.format(b.speed)} m/s`], ['Portée', b.main.range, this.maxRange, `${NUMBER.format(b.main.range)} m`] ]);
+    this.renderAbility('main', b.main.name, b.main.description, attackFigures(b.main, b, false));
+    this.renderAbility('super', b.super.name, b.super.description, attackFigures(b.super, b, true));
+  }
+
+  renderProf(p) {
+    byId('sel-name').textContent = p.name; byId('sel-role').textContent = p.role;
+    this.renderStats([ ['PV', p.hp, this.maxHp, NUMBER.format(p.hp)], ['Vitesse', p.speed, this.maxSpeed, `${NUMBER.format(p.speed)} m/s`], ['Dégâts', p.damage, this.maxProfDamage, NUMBER.format(p.damage)] ]);
+    this.renderAbility('main', 'Comportement', p.description, [['Annonce son coup', seconds(p.windupMs)], ['Récupère', seconds(p.cooldownMs)]]);
+    byId('super-block').hidden = true;
+  }
+
+  refreshRect() { this.previewRect = this.root.hidden ? null : this.preview.getBoundingClientRect(); }
+  show() { this.root.hidden = false; this.setBusy(false); this.refreshRect(); }
+  hide() { this.root.hidden = true; this.previewRect = null; }
+  setStatus(text, isError) { this.status.textContent = text; this.status.classList.toggle('error', isError); }
+  setBusy(busy) { this.btnHost.disabled = busy; this.btnJoin.disabled = busy; }
+}
