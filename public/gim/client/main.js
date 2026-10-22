@@ -62,7 +62,14 @@ net.onWelcome = (slot, team) => {
 net.onLobby = (data) => { if (connectTimer !== null) clearTimeout(connectTimer); state = STATE_MENU; input.setEnabled(false); menu.hide(); lobby.show(data, net.room); };
 const results = new ResultsScreen((id) => { net.pick(id); menu.selectBrawler(id); });
 results.onHide = () => { if (state === STATE_PLAYING) input.setEnabled(true); };
-net.onResults = (res) => { if (state !== STATE_PLAYING) return; input.setEnabled(false); results.show(res, net.localSlot); spectateRef = -1; };
+
+net.onResults = (res) => { 
+  if (state !== STATE_PLAYING) return; 
+  input.setEnabled(false); 
+  results.show(res, net.localSlot); 
+  spectateRef = -1; // CORRECTION : On réinitialise la caméra au moment des résultats !
+};
+
 net.onError = (message) => { if (connectTimer !== null) clearTimeout(connectTimer); backToMenu(message, true); };
 net.onClose = () => { if (state !== STATE_MENU) backToMenu("Connexion perdue.", true); };
 menuButton.addEventListener('click', () => { net.leave(); backToMenu('', false); });
@@ -71,11 +78,13 @@ window.addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !(e.target 
 window.addEventListener('pointerdown', (e) => {
   if (state === STATE_PLAYING && net.views.gameMode === MODE_BR && net.views.localSlot >= 0) {
     const p = net.views.players[net.views.localSlot];
+    // Si le joueur local est mort, un clic permet de faire défiler les spectateurs
     if (p && (p.flags & PF_DEAD) !== 0) {
       let found = false;
       for (let i = 1; i <= MAX_PLAYERS; i++) {
         const nextId = (Math.max(0, spectateRef) + i) % MAX_PLAYERS;
-        if (net.views.players[nextId].active && (net.views.players[nextId].flags & PF_DEAD) === 0) {
+        // On ne se spectate jamais soi-même et on cherche un joueur en vie
+        if (nextId !== net.localSlot && net.views.players[nextId].active && (net.views.players[nextId].flags & PF_DEAD) === 0) {
           spectateRef = nextId; found = true; break;
         }
       }
@@ -124,7 +133,27 @@ function handleEvent(e) {
   switch (e.type) {
     case EVENT.HIT: { renderer.flashRef(e.b); const takenByMe = e.b === local; hud.addDamage(e.x, e.y, headHeight(e.b), e.value, takenByMe ? DAMAGE_TAKEN_CSS : DAMAGE_CSS); effects.burst(e.x, e.y, 1, 5, 0xffffff, 3, 0.22, 250, 1); if (takenByMe) { renderer.addShake(SHAKE_HIT_TAKEN); audio.play(SOUND.HURT); } else sound(SOUND.HIT, e.x, e.y, e.a === local); break; }
     case EVENT.HEAL: hud.addDamage(e.x, e.y, headHeight(e.b), e.value, HEAL_CSS); effects.burst(e.x, e.y, 1, 10, 0x4ade80, 2, 0.3, 600, -0.2); sound(SOUND.HEAL, e.x, e.y, e.b === local || e.a === local); break;
-    case EVENT.KO: { const color = e.b < MAX_PLAYERS ? ACCENTS[net.roster[e.b].brawler] : PROF_ACCENTS[net.views.bots[e.b - BOT_REF_BASE].type]; effects.burst(e.x, e.y, 1, 34, color, 6, 0.45, 800, 1); effects.shockwave(e.x, e.y, 2, 0xffffff, RING_EFFECT_MS); sound(SOUND.KO, e.x, e.y, e.b === local || e.a === local); hud.addKill(e.a === REF_NONE ? '' : net.nameOf(e.a), colorOfRef(e.a), net.nameOf(e.b), colorOfRef(e.b), now); if (e.b === local) { renderer.addShake(SHAKE_KO); if (e.a !== REF_NONE) hud.showToast(`Mis K.O. par ${net.nameOf(e.a)}`, now, MS_PER_SECOND * 2); } break; }
+    case EVENT.KO: { 
+      const color = e.b < MAX_PLAYERS ? ACCENTS[net.roster[e.b].brawler] : PROF_ACCENTS[net.views.bots[e.b - BOT_REF_BASE].type]; 
+      effects.burst(e.x, e.y, 1, 34, color, 6, 0.45, 800, 1); effects.shockwave(e.x, e.y, 2, 0xffffff, RING_EFFECT_MS); sound(SOUND.KO, e.x, e.y, e.b === local || e.a === local); 
+      hud.addKill(e.a === REF_NONE ? '' : net.nameOf(e.a), colorOfRef(e.a), net.nameOf(e.b), colorOfRef(e.b), now); 
+      
+      if (e.b === local) { 
+        renderer.addShake(SHAKE_KO); 
+        if (e.a !== REF_NONE) hud.showToast(`Mis K.O. par ${net.nameOf(e.a)}`, now, MS_PER_SECOND * 2); 
+        
+        // CORRECTION AUTOMATIQUE : Dès que tu meurs en BR, on bascule direct la caméra sur un survivant valide
+        if (net.views.gameMode === MODE_BR) {
+          for (let i = 0; i < MAX_PLAYERS; i++) {
+            if (i !== local && net.views.players[i].active && (net.views.players[i].flags & PF_DEAD) === 0) {
+              spectateRef = i;
+              break;
+            }
+          }
+        }
+      } 
+      break; 
+    }
     case EVENT.ATTACK: { if (e.a >= MAX_PLAYERS) break; const brawlerId = e.c >> 1; if (brawlerId >= BRAWLER_COUNT) break; if (e.a === local && now - lastLocalFireAt < LOCAL_FIRE_MATCH_MS) break; const b = BRAWLERS[brawlerId]; renderer.attackAnimRef(e.a); attackFx((e.c & 1) === 1 ? b.super : b.main, brawlerId, e.x, e.y, e.angle, e.value, false); break; }
     case EVENT.IMPACT: impactFx(e); break;
     case EVENT.LAND: { const def = leapAttack(BRAWLERS[e.c < BRAWLER_COUNT ? e.c : 0]); effects.shockwave(e.x, e.y, def.aoeRadius, 0xffffff, RING_EFFECT_MS * 1.4); effects.burst(e.x, e.y, 0.2, 26, 0xcfc4ab, 6, 0.45, 600, HALF); sound(SOUND.LAND, e.x, e.y, e.a === local); if (e.a === local || nearLocal(e.x, e.y)) renderer.addShake(SHAKE_KO); break; }
