@@ -47,7 +47,6 @@ export class Renderer {
     this.botCache = new Map(); this.botShown = new Array(MAX_BOTS).fill(null);
     this.poseInput = { x: FLOAT_ZERO, y: FLOAT_ZERO, sceneX: FLOAT_ZERO, sceneZ: FLOAT_ZERO, facing: FLOAT_ZERO, air: FLOAT_ZERO, stunned: false, dashing: false, shielded: false, crawlTarget: FLOAT_ZERO, dt: FLOAT_ZERO, time: FLOAT_ZERO, };
     
-    // Ajout de la tempête BR
     const stormGeo = new THREE.CylinderGeometry(1, 1, 40, 64, 1, true);
     this.stormMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.4, side: THREE.BackSide, depthWrite: false });
     this.stormMesh = new THREE.Mesh(stormGeo, this.stormMat);
@@ -156,7 +155,7 @@ export class Renderer {
         const y = 0.25 + level * (height - 0.3) / 4; push(G.box, DECOR.SHELF_BOARD, w + 0.04, 0.04, d + 0.04, x, y - 0.03, z);
         for (let i = 0; i < books; i++) {
           const t = -long * HALF + (long * (i + 0.5)) / books; const bh = 0.24 + ((i * 7 + level * 3) % 4) * 0.03; const color = BOOK_COLORS[(i * 3 + level * 5) % BOOK_COLORS.length];
-          if (d >= w) push(G.box, color, w + 0.06, bh, long / books * 0.8, x, y + bh * HALF, z + t); else push(G.box, color, long / books * 0.8, bh, d + 0.06, x + t, y + bh * HALF, z);
+          if (d >= w) push(G.box, color, w + 0.06, bh, long / books * 0.8, x, y + bh * HALF, z + t); else push(G.box, color, long / books * 0.8, bh, x + t, y + bh * HALF, z);
         }
       }
     } else if (o.look === OBSTACLE_LOOK.DESK) { push(G.box, DECOR.WOOD_DARK, w, DESK_HEIGHT, d, x, DESK_HEIGHT * HALF, z); push(G.box, DECOR.WOOD_TOP, w + 0.1, 0.06, d + 0.1, x, DESK_HEIGHT, z);
@@ -311,9 +310,19 @@ export class Renderer {
       d.position.set(pr.x - hw, height, pr.y - hh);
       if (v === VISUAL.VINYL) d.rotation.set(0, -pr.angle + spin, 0); else if (v === VISUAL.BOBINE || v === VISUAL.MOLOTOV) d.rotation.set(0, -pr.angle, -spin); else if (v === VISUAL.BILLET || v === VISUAL.CHOUCROUTE) d.rotation.set(Math.sin(spin) * 0.8, -pr.angle + spin * 0.3, Math.cos(spin) * 0.5); else d.rotation.set(0, -pr.angle, 0);
       d.updateMatrix(); this.projectileMeshes[v].setMatrixAt(index, d.matrix);
+      this.projectileMeshes[v].visible = true;
       if ((v === VISUAL.MOLOTOV || v === VISUAL.ELECTRIC) && Math.random() < TRAIL_CHANCE) { this.effects.burst(pr.x, pr.y, height, 1, v === VISUAL.MOLOTOV ? 0xff8a1f : 0x7ff3ff, EMBER_SPEED * HALF, EMBER_SIZE, EMBER_LIFE_MS * HALF, 0); }
     }
-    for (let v = 0; v < PROJECTILE_VISUAL_COUNT; v++) { const mesh = this.projectileMeshes[v]; mesh.count = counts[v]; if (counts[v] > 0) mesh.instanceMatrix.needsUpdate = true; }
+    for (let v = 0; v < PROJECTILE_VISUAL_COUNT; v++) { 
+      const mesh = this.projectileMeshes[v]; 
+      mesh.count = counts[v]; 
+      if (counts[v] > 0) {
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.visible = true;
+      } else {
+        mesh.visible = false;
+      }
+    }
   }
 
   updateZones(views, time) {
