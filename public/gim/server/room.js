@@ -10,7 +10,15 @@ export class Room {
 
   prepareNextRound() {
     const w = this.world;
-    if (w.gameMode === MODE_BR) { this.nextMapId = 2; w.stormRadius = 100; w.stormX = w.arena.width / 2; w.stormY = w.arena.height / 2; } else { this.nextMapId = this.pickMap(w.arena.id); if (this.nextMapId === 2) this.nextMapId = 0; }
+    if (w.gameMode === MODE_BR) { 
+      this.nextMapId = 2; 
+      w.stormRadius = 100; 
+      w.stormX = w.arena.width / 2; 
+      w.stormY = w.arena.height / 2; 
+    } else { 
+      this.nextMapId = this.pickMap(w.arena.id); 
+      if (this.nextMapId === 2) this.nextMapId = 0; 
+    }
     setWorldArena(w, MAPS[this.nextMapId]); const slots = []; for (let i = 0; i < MAX_PLAYERS; i++) if (this.clients[i] !== null) slots.push(i);
     for (let i = slots.length - 1; i > 0; i--) { const j = nextInt(this.rng, i + 1); const tmp = slots[i]; slots[i] = slots[j]; slots[j] = tmp; }
     const first = nextInt(this.rng, 2) === 0 ? TEAM_A : TEAM_B;
@@ -51,7 +59,16 @@ export class Room {
     for (let i = 0; i < MAX_PLAYERS; i++) { const client = this.clients[i]; if (client !== null) this.processInputs(client); }
     const phaseBefore = this.world.roundPhase; if (phaseBefore === ROUND_PHASE_ENDED && this.world.roundMs - TICK_MS <= 0) this.prepareNextRound();
     stepWorld(this.world, TICK_MS, this.rng);
-    if (this.world.gameMode === MODE_BR && this.world.roundPhase !== ROUND_PHASE_ENDED) { this.world.stormRadius = Math.max(STORM_SAFE_RADIUS, this.world.stormRadius - STORM_SHRINK_SPEED * (TICK_MS / MS_PER_SECOND)); this.checkBRWinCondition(); }
+    
+    if (this.world.gameMode === MODE_BR && this.world.roundPhase !== ROUND_PHASE_ENDED) {
+      // CORRECTION : La zone commence à se rétrécir uniquement après 1 minute écoulée (ex: si la manche dure 3 min, elle commence à 2 min restantes)
+      const elapsedMs = this.world.roundDurationMs - this.world.roundMs;
+      if (elapsedMs >= 60000) {
+        this.world.stormRadius = Math.max(STORM_SAFE_RADIUS, this.world.stormRadius - STORM_SHRINK_SPEED * (TICK_MS / MS_PER_SECOND));
+      }
+      this.checkBRWinCondition();
+    }
+    
     if (phaseBefore !== ROUND_PHASE_ENDED && this.world.roundPhase === ROUND_PHASE_ENDED && this.world.gameMode !== MODE_BR) { this.broadcastResults(); }
     if (this.rosterDirty) this.broadcastRoster();
     this.snapshotAccMs += TICK_MS; if (this.snapshotAccMs >= SNAPSHOT_INTERVAL_MS) { this.snapshotAccMs -= SNAPSHOT_INTERVAL_MS; this.sendSnapshots(serverTime); }
