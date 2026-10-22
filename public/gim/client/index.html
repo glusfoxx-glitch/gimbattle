@@ -12,7 +12,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Caveat+Brush&display=swap">
   <link rel="stylesheet" href="style.css">
-  <!-- Three.js sans étape de build : copie locale si « npm run vendor » a été lancé, sinon le serveur redirige vers le CDN. -->
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" } }</script>
 </head>
 <body>
@@ -27,23 +26,20 @@
         <p class="tagline">Bleus contre Rouges, et les profs qui rôdent entre les tables.</p>
       </div>
       <form id="join-form" class="join" autocomplete="off">
-        <label class="field">
-          <span class="hand">Pseudo</span>
-          <input id="name-input" name="name" maxlength="16" placeholder="Ton pseudo" enterkeyhint="go">
-        </label>
-        <label class="field field-room">
-          <span class="hand">Code</span>
-          <input id="room-input" name="room" maxlength="16" placeholder="ton code" enterkeyhint="go">
-        </label>
-        <div class="field field-mode">
-          <span class="hand" id="mode-label">Partie</span>
-          <div class="mode-toggle" role="radiogroup" aria-labelledby="mode-label">
-            <button type="button" class="mode-opt" data-mode="host" role="radio" aria-checked="true">Créer</button>
-            <button type="button" class="mode-opt" data-mode="join" role="radio" aria-checked="false">Rejoindre</button>
-          </div>
-          <input type="hidden" id="mode-input" name="mode" value="host">
+        <div style="display: flex; gap: 14px; align-items: flex-end; width: 100%;">
+          <label class="field">
+            <span class="hand">Pseudo</span>
+            <input id="name-input" name="name" maxlength="16" placeholder="Ton pseudo" enterkeyhint="go">
+          </label>
+          <label class="field field-room">
+            <span class="hand">Code</span>
+            <input id="room-input" name="room" maxlength="16" placeholder="Le code" enterkeyhint="go">
+          </label>
         </div>
-        <button id="play-btn" class="play" type="submit">Jouer</button>
+        <div style="display: flex; gap: 14px; width: 100%; margin-top: 8px;">
+          <button id="btn-host" class="play" style="background: #4ade80; color: #064e3b; flex: 1;" type="button">Créer un salon</button>
+          <button id="btn-join" class="play" style="flex: 1;" type="button">Rejoindre</button>
+        </div>
       </form>
     </header>
 
@@ -90,7 +86,6 @@
   <div id="boot-error" class="boot-error" hidden></div>
 
   <script>
-    // Garde-fou : si le module principal ne démarre pas (Three.js injoignable, navigateur trop ancien), on le dit clairement.
     setTimeout(function () {
       if (window.gimReady) return;
       var box = document.getElementById('boot-error');
