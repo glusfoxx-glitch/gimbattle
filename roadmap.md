@@ -20,3 +20,4 @@
 - [ ] Pre-game lobby: everyone with the code waits, picks character; host-only settings visible to all; host launches
 - [ ] Home menu with Héberger / Rejoindre buttons
 - [ ] Full verification + many tests
+- [ ] Urgent: diagnose mutual join failures on restrictive networks; add verified relay configuration if available
