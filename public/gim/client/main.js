@@ -12,6 +12,7 @@ import {
   CONNECT_TIMEOUT_MS, PF_DEAD, HALF, FLOAT_ZERO,
 } from '../shared/constants.js';
 import { ResultsScreen } from './results.js';
+import { Lobby } from './lobby.js';
 import { BRAWLERS, BRAWLER_COUNT } from '../shared/brawlers.js';
 import { PROFS } from '../shared/profs.js';
 import { raycast } from '../shared/physics.js';
@@ -71,6 +72,10 @@ const menu = new Menu(startGame, () => {
   audio.unlock();
   audio.play(SOUND.SELECT);
 });
+const lobby = new Lobby((id) => { net.pick(id); menu.selectBrawler(id); },
+  (minutes, map) => net.sendSettings(minutes, map), () => net.start(), () => {
+    net.leave(); backToMenu('', false);
+  });
 
 let state = STATE_MENU;
 let lastFrame = performance.now();
@@ -113,15 +118,15 @@ function startGame(name, brawler, room, mode) {
   if (connectTimer !== null) clearTimeout(connectTimer);
   connectTimer = setTimeout(() => {
     if (state !== STATE_CONNECTING) return;
-    state = STATE_MENU;
-    menu.setBusy(false);
-    menu.setStatus("Aucune partie ne répond. Vérifie le code de salon et que l'hôte est bien en ligne.", true);
+    net.leave();
+    backToMenu("La connexion n’a pas abouti. Essaie un autre réseau (Wi-Fi ou données mobiles).", true);
   }, CONNECT_TIMEOUT_MS);
 }
 
 /** @param {string} message @param {boolean} isError */
 function backToMenu(message, isError) {
   state = STATE_MENU;
+  lobby.hide();
   results.hide();
   input.setEnabled(false);
   hud.wipe();
@@ -137,12 +142,21 @@ net.onWelcome = (slot, team) => {
   accumulator = 0;
   superWasReady = false;
   menu.hide();
+  lobby.hide();
   hud.clear();
   effects.clear();
   input.setEnabled(true);
   menuButton.hidden = false;
   document.body.classList.add('playing');
   hud.showBanner(team === TEAM_A ? 'Équipe BLEUE' : 'Équipe ROUGE', "Mets K.O. l'équipe adverse… et les profs !", TEAM_CSS[team], performance.now());
+};
+
+net.onLobby = (data) => {
+  if (connectTimer !== null) clearTimeout(connectTimer);
+  state = STATE_MENU;
+  input.setEnabled(false);
+  menu.hide();
+  lobby.show(data, net.room);
 };
 
 const results = new ResultsScreen((id) => {

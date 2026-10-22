@@ -194,7 +194,7 @@ export class Menu {
   refreshPlayLabel() {
     if (this.playButton === undefined || this.selected === undefined) return;
     const name = BRAWLERS[this.selected].name;
-    this.playButton.textContent = this.modeInput.value === 'join' ? `Rejoindre avec ${name}` : `Créer avec ${name}`;
+    this.playButton.textContent = this.modeInput.value === 'join' ? 'Rejoindre le salon' : 'Créer le salon';
   }
 
   /** @param {(name: string, brawler: number, room: string, mode: string) => void} onPlay */
