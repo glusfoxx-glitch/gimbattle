@@ -1,118 +1,81 @@
-/**
- * Un salon = un monde simulé + ses clients. Le serveur fait autorité :
- * il consomme UN input par client et par tick (comme le client qui prédit), simule, puis diffuse les snapshots.
- */
 import {
   MAX_PLAYERS, MAX_INPUT_QUEUE, INPUT_CATCHUP_THRESHOLD, TICK_MS, SNAPSHOT_INTERVAL_MS, SNAPSHOT_BUFFER_BYTES,
   TEAM_A, TEAM_B, MAX_SEQ_JUMP, INPUT_STARVE_GRACE_TICKS, ROUND_PHASE_ENDED, ROUND_DRAW,
-  MAP_COUNT, MAP_MODE_BOTH, MS_PER_SECOND, ROUND_END_PAUSE_MS,
+  MAP_COUNT, MAP_MODE_ALL, MS_PER_SECOND, ROUND_END_PAUSE_MS, MODE_TDM, MODE_BR, STORM_SHRINK_SPEED, STORM_SAFE_RADIUS,
 } from '../shared/constants.js';
 import { ARENA, MAPS } from '../shared/arena.js';
 import { createWorld, countTeam, setWorldArena } from '../shared/world.js';
 import { createRng, nextInt } from '../shared/rng.js';
+import { BRAWLER_COUNT } from '../shared/brawlers.js';
 import {
   createInput, copyInput, stepPlayerSelf, applyPlayerActions, stepWorld, resolveAutoAim, activatePlayer, deactivatePlayer,
   dashContacts,
 } from '../shared/simulation.js';
 import { ByteWriter, encodeSnapshot, takeBytes, makeWelcome, makeRoster, makeResults, makeTeam } from '../shared/protocol.js';
 
-/** @typedef {import('../shared/simulation.js').PlayerInput} PlayerInput */
-
-/**
- * File circulaire d'inputs pré-alloués (aucune allocation à la réception).
- */
 export class InputQueue {
   constructor() {
-    /** @type {PlayerInput[]} */
     this.items = new Array(MAX_INPUT_QUEUE);
     for (let i = 0; i < MAX_INPUT_QUEUE; i++) this.items[i] = createInput();
-    this.head = 0;
-    this.count = 0;
-    this.lastReceivedSeq = 0;
+    this.head = 0; this.count = 0; this.lastReceivedSeq = 0;
   }
-  reset() {
-    this.head = 0;
-    this.count = 0;
-    this.lastReceivedSeq = 0;
-  }
-  /**
-   * @param {PlayerInput} input
-   * @returns {string|null} Raison du rejet, null si accepté.
-   */
+  reset() { this.head = 0; this.count = 0; this.lastReceivedSeq = 0; }
   push(input) {
-    if (input.seq <= this.lastReceivedSeq) return 'séquence rejouée ou désordonnée';
-    if (input.seq > this.lastReceivedSeq + MAX_SEQ_JUMP) return 'saut de séquence suspect';
-    if (this.count >= MAX_INPUT_QUEUE) return "file d'inputs pleine (débit trop élevé)";
+    if (input.seq <= this.lastReceivedSeq) return 'séquence rejouée';
+    if (input.seq > this.lastReceivedSeq + MAX_SEQ_JUMP) return 'saut de séquence';
+    if (this.count >= MAX_INPUT_QUEUE) return "file pleine";
     copyInput(this.items[(this.head + this.count) % MAX_INPUT_QUEUE], input);
-    this.count++;
-    this.lastReceivedSeq = input.seq;
-    return null;
+    this.count++; this.lastReceivedSeq = input.seq; return null;
   }
-  /** @returns {PlayerInput} */
-  shift() {
-    const item = this.items[this.head];
-    this.head = (this.head + 1) % MAX_INPUT_QUEUE;
-    this.count--;
-    return item;
-  }
+  shift() { const item = this.items[this.head]; this.head = (this.head + 1) % MAX_INPUT_QUEUE; this.count--; return item; }
 }
 
-/**
- * @typedef {Object} RoomClient
- * @property {number} slot @property {string} name @property {number} brawlerId
- * @property {number} ackSeq @property {number} eventFrom @property {InputQueue} queue
- * @property {Room|null} room
- * @property {(data: ArrayBuffer|string) => void} send
- */
-
 export class Room {
-  /**
-   * @param {string} id @param {number} seed
-   */
   constructor(id, seed) {
-    this.id = id;
-    this.world = createWorld(ARENA);
-    this.rng = createRng(seed);
-    /** @type {(RoomClient|null)[]} */
-    this.clients = new Array(MAX_PLAYERS).fill(null);
-    this.clientCount = 0;
-    this.snapshotAccMs = 0;
-    this.rosterDirty = false;
-    this.writer = new ByteWriter(SNAPSHOT_BUFFER_BYTES);
-    this.neutralInput = createInput();
-    /** @type {import('../shared/protocol.js').SnapshotContext} */
+    this.id = id; this.world = createWorld(ARENA); this.rng = createRng(seed);
+    this.clients = new Array(MAX_PLAYERS).fill(null); this.clientCount = 0;
+    this.snapshotAccMs = 0; this.rosterDirty = false;
+    this.writer = new ByteWriter(SNAPSHOT_BUFFER_BYTES); this.neutralInput = createInput();
     this.ctx = { viewer: null, ackSeq: 0, serverTime: 0, eventFrom: 0 };
-    /** Carte(s) : MAP_CLASSE, MAP_CDI ou MAP_MODE_BOTH (tirage à chaque manche). */
-    this.mapMode = 0;
-    this.nextMapId = 0;
+    this.mapMode = 0; this.nextMapId = 0;
   }
 
-  /**
-   * Réglages choisis par l'hôte dans le salon d'attente (à appeler avant d'ajouter les joueurs).
-   * @param {number} minutes Durée d'une manche. @param {number} mapMode
-   */
-  configure(minutes, mapMode) {
+  configure(minutes, mapMode, gameMode) {
     const w = this.world;
     w.roundDurationMs = minutes * 60 * MS_PER_SECOND;
     w.roundMs = w.roundDurationMs;
+    w.gameMode = gameMode;
     this.mapMode = mapMode;
-    setWorldArena(w, MAPS[this.pickMap(-1)]);
-    this.nextMapId = w.arena.id;
+    
+    // Forcer la map BR en mode BR si configuré ainsi, sinon tirage
+    if (w.gameMode === MODE_BR) {
+      this.nextMapId = 2; // ARENA_BR
+    } else {
+      this.nextMapId = this.pickMap(-1);
+      if (this.nextMapId === 2) this.nextMapId = 0; // Exclure la map BR des modes TDM
+    }
+    setWorldArena(w, MAPS[this.nextMapId]);
   }
 
-  /** @param {number} current Carte jouée (évitée en mode « les deux » pour varier). @returns {number} */
   pickMap(current) {
-    if (this.mapMode !== MAP_MODE_BOTH) return Math.min(this.mapMode, MAP_COUNT - 1);
+    if (this.mapMode !== MAP_MODE_ALL) return Math.min(this.mapMode, MAP_COUNT - 1);
     if (current < 0) return nextInt(this.rng, MAP_COUNT);
-    // Les cartes tournent : jamais deux fois de suite la même.
     return (current + 1 + nextInt(this.rng, MAP_COUNT - 1)) % MAP_COUNT;
   }
 
-  /**
-   * Juste avant une nouvelle manche : équipes tirées au sort et carte suivante.
-   */
   prepareNextRound() {
     const w = this.world;
+    
+    if (w.gameMode === MODE_BR) {
+      this.nextMapId = 2;
+      w.stormRadius = 100;
+      w.stormX = w.arena.width / 2;
+      w.stormY = w.arena.height / 2;
+    } else {
+      this.nextMapId = this.pickMap(w.arena.id);
+      if (this.nextMapId === 2) this.nextMapId = 0;
+    }
+    
     setWorldArena(w, MAPS[this.nextMapId]);
     const slots = [];
     for (let i = 0; i < MAX_PLAYERS; i++) if (this.clients[i] !== null) slots.push(i);
@@ -122,34 +85,32 @@ export class Room {
     }
     const first = nextInt(this.rng, 2) === 0 ? TEAM_A : TEAM_B;
     slots.forEach((slot, i) => {
-      const team = i % 2 === 0 ? first : 1 - first;
       const p = w.players[slot];
-      if (p.team === team) return;
-      p.team = team;
-      this.clients[slot]?.send(makeTeam(team));
+      if (w.gameMode === MODE_BR) {
+        p.team = 10 + slot; // Équipes uniques
+        p.brawlerId = nextInt(this.rng, BRAWLER_COUNT); // Brawler aléatoire
+      } else {
+        p.team = i % 2 === 0 ? first : 1 - first;
+      }
+      this.clients[slot]?.send(makeTeam(p.team));
     });
     this.rosterDirty = true;
   }
 
-  /**
-   * Ajoute un joueur dans l'équipe la moins remplie.
-   * @param {RoomClient} client @param {string} name @param {number} brawlerId
-   * @returns {number} Emplacement attribué, -1 si le salon est plein.
-   */
   addClient(client, name, brawlerId) {
     const slot = this.clients.indexOf(null);
     if (slot < 0) return -1;
-    const team = countTeam(this.world, TEAM_A) <= countTeam(this.world, TEAM_B) ? TEAM_A : TEAM_B;
-    this.clients[slot] = client;
-    this.clientCount++;
-    client.room = this;
-    client.slot = slot;
-    client.name = name;
-    client.brawlerId = brawlerId;
-    client.ackSeq = 0;
-    client.starveTicks = 0;
-    client.inputDebt = 0;
-    client.queue.reset();
+    let team = TEAM_A;
+    if (this.world.gameMode === MODE_BR) {
+      team = 10 + slot;
+      brawlerId = nextInt(this.rng, BRAWLER_COUNT);
+    } else {
+      team = countTeam(this.world, TEAM_A) <= countTeam(this.world, TEAM_B) ? TEAM_A : TEAM_B;
+    }
+    
+    this.clients[slot] = client; this.clientCount++;
+    client.room = this; client.slot = slot; client.name = name; client.brawlerId = brawlerId;
+    client.ackSeq = 0; client.starveTicks = 0; client.inputDebt = 0; client.queue.reset();
     client.eventFrom = this.world.eventHead;
     activatePlayer(this.world, slot, team, brawlerId, this.rng);
     client.send(makeWelcome(slot, team, this.id));
@@ -157,48 +118,24 @@ export class Room {
     return slot;
   }
 
-  /** @param {RoomClient} client */
   removeClient(client) {
     if (client.room !== this || client.slot < 0) return;
     deactivatePlayer(this.world, client.slot);
-    this.clients[client.slot] = null;
-    this.clientCount--;
-    client.slot = -1;
-    client.room = null;
-    this.rosterDirty = true;
+    this.clients[client.slot] = null; this.clientCount--;
+    client.slot = -1; client.room = null; this.rosterDirty = true;
   }
 
-  /**
-   * Consomme les inputs d'un client.
-   * Le temps du joueur avance AVEC ses inputs (exactement comme sa prédiction locale) :
-   * - file vide pendant un court instant (gigue réseau) : on attend l'input en retard au lieu d'inventer un pas
-   *   « immobile » que le client n'a pas prédit (c'était la cause des téléportations / persos qui reculent) ;
-   *   la dette est rattrapée dès que les inputs arrivent (2 par tick) ;
-   * - file vide trop longtemps (onglet en arrière-plan, déconnexion) : pas à vide, le temps continue ;
-   * - file trop longue : on rattrape à 2 inputs par tick pour résorber la latence accumulée.
-   * @param {RoomClient} client
-   */
   processInputs(client) {
-    const p = this.world.players[client.slot];
-    const queue = client.queue;
+    const p = this.world.players[client.slot]; const queue = client.queue;
     if (queue.count === 0) {
       client.starveTicks = (client.starveTicks ?? 0) + 1;
-      if (client.starveTicks <= INPUT_STARVE_GRACE_TICKS) {
-        client.inputDebt = Math.min(INPUT_STARVE_GRACE_TICKS, (client.inputDebt ?? 0) + 1);
-        return;
-      }
-      client.inputDebt = 0;
-      const neutral = this.neutralInput;
-      neutral.moveX = 0;
-      neutral.moveY = 0;
-      neutral.buttons = 0;
-      neutral.aimAngle = p.aimAngle;
-      neutral.aimDist = 0;
+      if (client.starveTicks <= INPUT_STARVE_GRACE_TICKS) { client.inputDebt = Math.min(INPUT_STARVE_GRACE_TICKS, (client.inputDebt ?? 0) + 1); return; }
+      client.inputDebt = 0; const neutral = this.neutralInput;
+      neutral.moveX = 0; neutral.moveY = 0; neutral.buttons = 0; neutral.aimAngle = p.aimAngle; neutral.aimDist = 0;
       applyPlayerActions(this.world, p, stepPlayerSelf(p, neutral, TICK_MS, this.world.arena), neutral);
       return;
     }
-    client.starveTicks = 0;
-    let steps = 1;
+    client.starveTicks = 0; let steps = 1;
     if (queue.count > INPUT_CATCHUP_THRESHOLD) steps = 2;
     else if ((client.inputDebt ?? 0) > 0 && queue.count > 1) steps = 2;
     if (steps === 2 && (client.inputDebt ?? 0) > 0) client.inputDebt--;
@@ -208,12 +145,32 @@ export class Room {
       const flags = stepPlayerSelf(p, input, TICK_MS, this.world.arena);
       applyPlayerActions(this.world, p, flags, input);
       client.ackSeq = input.seq;
-      // Pas supplémentaire : on vérifie les contacts du dash à mi-chemin (sinon une cible frôlée est ratée).
       if (s < steps - 1 && p.dashing && !p.dead) dashContacts(this.world, p);
     }
   }
 
-  /** @param {number} serverTime */
+  checkBRWinCondition() {
+    if (this.world.gameMode !== MODE_BR || this.world.roundPhase === ROUND_PHASE_ENDED) return;
+    if (this.world.roundMs > this.world.roundDurationMs - 3000) return; // Pas de victoire dans les 3 premières secondes
+    
+    let aliveCount = 0;
+    let lastAliveTeam = ROUND_DRAW;
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      const p = this.world.players[i];
+      if (p.active && !p.dead) {
+        aliveCount++;
+        lastAliveTeam = p.team;
+      }
+    }
+    
+    if (aliveCount <= 1) {
+      this.world.roundPhase = ROUND_PHASE_ENDED;
+      this.world.roundMs = ROUND_END_PAUSE_MS;
+      this.world.scores[0] = lastAliveTeam; // On stocke l'équipe du vainqueur temporairement
+      this.broadcastResults(lastAliveTeam);
+    }
+  }
+
   tick(serverTime) {
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const client = this.clients[i];
@@ -221,8 +178,18 @@ export class Room {
     }
     const phaseBefore = this.world.roundPhase;
     if (phaseBefore === ROUND_PHASE_ENDED && this.world.roundMs - TICK_MS <= 0) this.prepareNextRound();
+    
     stepWorld(this.world, TICK_MS, this.rng);
-    if (phaseBefore !== ROUND_PHASE_ENDED && this.world.roundPhase === ROUND_PHASE_ENDED) this.broadcastResults();
+    
+    if (this.world.gameMode === MODE_BR && this.world.roundPhase !== ROUND_PHASE_ENDED) {
+      this.world.stormRadius = Math.max(STORM_SAFE_RADIUS, this.world.stormRadius - STORM_SHRINK_SPEED * (TICK_MS / MS_PER_SECOND));
+      this.checkBRWinCondition();
+    }
+    
+    if (phaseBefore !== ROUND_PHASE_ENDED && this.world.roundPhase === ROUND_PHASE_ENDED && this.world.gameMode !== MODE_BR) {
+      this.broadcastResults();
+    }
+    
     if (this.rosterDirty) this.broadcastRoster();
     this.snapshotAccMs += TICK_MS;
     if (this.snapshotAccMs >= SNAPSHOT_INTERVAL_MS) {
@@ -231,66 +198,55 @@ export class Room {
     }
   }
 
-  /** @param {number} serverTime */
   sendSnapshots(serverTime) {
-    const ctx = this.ctx;
-    ctx.serverTime = serverTime;
+    const ctx = this.ctx; ctx.serverTime = serverTime;
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const client = this.clients[i];
-      if (client === null) continue;
-      ctx.viewer = this.world.players[client.slot];
-      ctx.ackSeq = client.ackSeq;
-      ctx.eventFrom = client.eventFrom;
+      const client = this.clients[i]; if (client === null) continue;
+      ctx.viewer = this.world.players[client.slot]; ctx.ackSeq = client.ackSeq; ctx.eventFrom = client.eventFrom;
       client.eventFrom = encodeSnapshot(this.writer, this.world, ctx);
       client.send(takeBytes(this.writer));
     }
     ctx.viewer = null;
   }
 
-  /**
-   * Changement de perso, autorisé seulement pendant l'écran de fin de manche (appliqué à la réapparition).
-   * @param {RoomClient} client @param {number} brawlerId
-   * @returns {boolean}
-   */
   pickBrawler(client, brawlerId) {
-    if (client.room !== this || client.slot < 0 || this.world.roundPhase !== ROUND_PHASE_ENDED) return false;
-    client.brawlerId = brawlerId;
-    this.world.players[client.slot].brawlerId = brawlerId;
-    this.rosterDirty = true;
-    return true;
+    if (client.room !== this || client.slot < 0 || this.world.roundPhase !== ROUND_PHASE_ENDED || this.world.gameMode === MODE_BR) return false;
+    client.brawlerId = brawlerId; this.world.players[client.slot].brawlerId = brawlerId; this.rosterDirty = true; return true;
   }
 
-  broadcastResults() {
+  broadcastResults(brWinnerTeam = -1) {
     const w = this.world;
-    const a = w.scores[TEAM_A];
-    const b = w.scores[TEAM_B];
     const players = [];
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const c = this.clients[i];
-      if (c === null) continue;
+      const c = this.clients[i]; if (c === null) continue;
       const p = w.players[c.slot];
       players.push({ slot: c.slot, name: c.name, brawler: p.brawlerId, team: p.team, kills: p.kills, deaths: p.deaths });
     }
-    this.nextMapId = this.pickMap(w.arena.id);
-    const message = makeResults(a > b ? TEAM_A : b > a ? TEAM_B : ROUND_DRAW, a, b, players, this.nextMapId, ROUND_END_PAUSE_MS);
+    
+    let winner = ROUND_DRAW;
+    if (w.gameMode === MODE_BR) {
+      winner = brWinnerTeam;
+    } else {
+      const a = w.scores[TEAM_A]; const b = w.scores[TEAM_B];
+      winner = a > b ? TEAM_A : b > a ? TEAM_B : ROUND_DRAW;
+    }
+    
+    this.nextMapId = this.world.gameMode === MODE_BR ? 2 : this.pickMap(w.arena.id);
+    const message = makeResults(winner, w.scores[TEAM_A], w.scores[TEAM_B], players, this.nextMapId, ROUND_END_PAUSE_MS);
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const c = this.clients[i];
-      if (c !== null) c.send(message);
+      const c = this.clients[i]; if (c !== null) c.send(message);
     }
   }
 
   broadcastRoster() {
-    this.rosterDirty = false;
-    /** @type {import('../shared/protocol.js').RosterEntry[]} */
-    const players = [];
+    this.rosterDirty = false; const players = [];
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const c = this.clients[i];
       if (c !== null) players.push({ slot: c.slot, name: c.name, brawler: c.brawlerId, team: this.world.players[c.slot].team });
     }
     const message = makeRoster(players);
     for (let i = 0; i < MAX_PLAYERS; i++) {
-      const c = this.clients[i];
-      if (c !== null) c.send(message);
+      const c = this.clients[i]; if (c !== null) c.send(message);
     }
   }
 }
